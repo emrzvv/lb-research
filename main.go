@@ -11,16 +11,17 @@ import (
 )
 
 const (
-	segmentBytes   = 1_000_000 // сколько весит (байтах) 1 .ts-фрагмент
-	simulationTime = 600.0     // секунд
-	simulationStep = 1.0       // шаг симуляции (для сбора snapshot'ов и построения графиков)
-	serversAmount  = 20        // кол-во серверов
-	sigmaServer    = 0.25      // CV лог-нормального шума
+	simulationTime = 600.0 // секунд
+	simulationStep = 1.0   // шаг симуляции (для сбора snapshot'ов и построения графиков)
+	serversAmount  = 10    // кол-во серверов
+	sigmaServer    = 0.25  // CV лог-нормального шума
 
-	segmentDuration = 6     // длительность одного фрагмента (секунд)
-	bitrate         = 4.0   // fullhd TODO: variying
-	meanMbps        = 100.0 // средняя пропускная способность
-	stdMbps         = 10.0  // стандартное отклонение для Mbps
+	segmentDuration  = 6                                         // длительность одного фрагмента (секунд)
+	bitrate          = 4.0                                       // mbps fullhd bitrate; TODO: variying?
+	segmentSizeBytes = bitrate * 1_000_000 / 8 * segmentDuration // сколько весит (байтах) 1 .ts-фрагмент
+
+	meanMbps = 500.0 // средняя пропускная способность
+	stdMbps  = 100.0 // стандартное отклонение для Mbps
 
 	meanOWD = 100.0 // среднее one-way delay (e2e-delay) в мс
 	stdOWD  = 30.0  // стандартное отклонение OWD
@@ -94,6 +95,7 @@ type Server struct {
 	ID                 int
 	CurrentConnections int
 	CurrentOWD         float64
+	spikeUntil         float64
 	Parameters         *ServerParameters
 	Snapshots          []*ServerSnapshot
 	mu                 sync.Mutex
@@ -140,19 +142,47 @@ func (s *Server) HandleRequest(p simgo.Process, start float64, statistics *Stati
 }
 
 func (s *Server) getDuration() float64 { // TODO: зависимость от кол-ва соединений?
-	meainTx := float64(segmentBytes*8) / (s.Parameters.Mbps * 1_000_000)
-	lnMean := math.Log(meainTx)
-	tx := math.Exp(rand.NormFloat64()*sigmaServer + lnMean)
-	rtt := tx + 2*s.CurrentOWD/1000.0 // to seconds
+	// время передачи сегмента в секундах
+	tx := segmentSizeBytes * 8 / (s.Parameters.Mbps * 1_000_000)
+	ln := math.Log(tx)
+	// логнормальное распределение
+	txDistr := math.Exp(rand.NormFloat64()*sigmaServer + ln)
+	rtt := txDistr + 2*s.CurrentOWD/1000.0 // to seconds
 	return rtt
 }
 
-type Balancer struct {
+type Balancer interface {
+	PickServer() *Server
+	GetServers() []*Server
+}
+
+type RandomBalancer struct {
 	servers []*Server
 }
 
-func (b *Balancer) PickServer() *Server {
+func (b *RandomBalancer) PickServer() *Server {
 	return b.servers[rand.Intn(len(b.servers))]
+}
+
+func (b *RandomBalancer) GetServers() []*Server {
+	return b.servers
+}
+
+type RRBalancer struct {
+	servers []*Server
+	mu      sync.Mutex
+	idx     int
+}
+
+func (b *RRBalancer) PickServer() *Server {
+	b.mu.Lock()
+	b.idx = (b.idx + 1) % len(b.servers)
+	b.mu.Unlock()
+	return b.servers[b.idx]
+}
+
+func (b *RRBalancer) GetServers() []*Server {
+	return b.servers
 }
 
 func randomFragments() int {
@@ -169,14 +199,14 @@ func randomFragments() int {
 
 func generateRequest(p simgo.Process,
 	sim *simgo.Simulation,
-	balancer *Balancer,
+	balancer Balancer,
 	statistics *Statistics) {
 	// отдельная горутина
 	// которая раз в simulationStep делает снэпшоты каждого сервера
 	sim.Process(func(sp simgo.Process) { // TODO: вынести
 		for t := 0.0; t < simulationTime; t += simulationStep {
 			sp.Wait(sp.Timeout(simulationStep))
-			for _, s := range balancer.servers {
+			for _, s := range balancer.GetServers() {
 				s.mu.Lock()
 				snap := &ServerSnapshot{
 					T:           sp.Now(),
@@ -265,15 +295,54 @@ func main() {
 		s := &Server{
 			ID:                 i + 1,
 			CurrentConnections: 0,
-			CurrentOWD:         50.0,
+			CurrentOWD:         p.OWD,
 			Parameters:         p,
 			Snapshots:          make([]*ServerSnapshot, 0),
 		}
 
 		servers = append(servers, s)
 	}
-	balancer := &Balancer{
+
+	for _, srv := range servers {
+		s := srv
+		simulation.Process(func(proc simgo.Process) {
+			base := s.Parameters.OWD
+			for proc.Now() < simulationTime {
+				proc.Wait(proc.Timeout(owdTick))
+				s.mu.Lock()
+				now := proc.Now()
+				if now < s.spikeUntil {
+					s.CurrentOWD = base + spikeExtra
+					s.mu.Unlock()
+					continue
+				}
+
+				if rand.Float64() < pSpike {
+					s.spikeUntil = now + spikeDuration
+					s.CurrentOWD = base + spikeExtra
+					s.mu.Unlock()
+					continue
+				}
+
+				jitter := rand.NormFloat64() * owdJitterSTD
+				newOWD := base + jitter
+				if newOWD < 50.0 { // fallback
+					newOWD = 50.0
+				}
+				s.CurrentOWD = newOWD
+				s.mu.Unlock()
+			}
+		})
+	}
+
+	// balancer := &RandomBalancer{
+	// 	servers: servers,
+	// }
+
+	balancer := &RRBalancer{
 		servers: servers,
+		mu:      sync.Mutex{},
+		idx:     0,
 	}
 
 	simulation.Process(func(p simgo.Process) { generateRequest(p, simulation, balancer, statistics) })
