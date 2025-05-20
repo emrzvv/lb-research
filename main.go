@@ -29,7 +29,6 @@ const (
 
 const (
 	owdTick       = 1.0   // шаг обновления OWD
-	owdJitterSTD  = 10.0  // разброс джиттера, мс
 	pSpike        = 0.002 // 0.2% шанс спайка на каждом тике
 	spikeExtra    = 300.0 // мс добавки при спайке
 	spikeDuration = 5.0   // длительность спайка
@@ -283,8 +282,8 @@ func main() {
 		// normalMbps := distuv.Normal{Mu: meanMbps, Sigma: stdMbps, Src: rand.NewSource(time.Now().UnixNano())}
 		// normalRTT  := distuv.Normal{Mu: meanRTT, Sigma: stdRTT, Src: rand.NewSource(time.Now().UnixNano())}
 
-		mbps := rand.NormFloat64()*stdMbps + meanMbps
-		owd := rand.NormFloat64()*stdOWD + meanOWD
+		mbps := rand.NormFloat64()*stdMbps + meanMbps // TODO: new distribution needed
+		owd := randGamma(meanOWD, stdOWD/meanOWD)
 
 		p := &ServerParameters{
 			Mbps:           mbps,
@@ -324,12 +323,7 @@ func main() {
 					continue
 				}
 
-				jitter := rand.NormFloat64() * owdJitterSTD
-				newOWD := base + jitter
-				if newOWD < 50.0 { // fallback
-					newOWD = 50.0
-				}
-				s.CurrentOWD = newOWD
+				s.CurrentOWD = randGamma(meanOWD, stdOWD/meanOWD)
 				s.mu.Unlock()
 			}
 		})
