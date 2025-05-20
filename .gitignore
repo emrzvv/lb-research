@@ -25,3 +25,5 @@ go.work.sum
 .env
 /temp*
 /results*
+/csv*
+/plots*
