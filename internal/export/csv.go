@@ -1,12 +1,16 @@
-package main
+package export
 
 import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"strings"
+
+	"github.com/emrzvv/lb-research/internal/model"
+	"github.com/emrzvv/lb-research/internal/stats"
 )
 
-func writeServersCfgToCSV(servers []*Server, path string) error {
+func writeServersCfgToCSV(servers []*model.Server, path string) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -26,7 +30,7 @@ func writeServersCfgToCSV(servers []*Server, path string) error {
 	return w.Error()
 }
 
-func writeSummaryToCSV(stats *Statistics, servers []*Server, path string) error {
+func writeSummaryToCSV(stats *stats.Statistics, servers []*model.Server, path string) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -54,7 +58,7 @@ func writeSummaryToCSV(stats *Statistics, servers []*Server, path string) error 
 	return w.Error()
 }
 
-func writeSnapshotsToCSV(servers []*Server, path string) error {
+func writeSnapshotsToCSV(servers []*model.Server, path string) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -78,7 +82,7 @@ func writeSnapshotsToCSV(servers []*Server, path string) error {
 	return wr.Error()
 }
 
-func writeStatisticsToCSV(stats *Statistics,
+func writeStatisticsToCSV(stats *stats.Statistics,
 	arrivalsPath,
 	requestsPath,
 	dropsPath string) error {
@@ -141,4 +145,34 @@ func writeStatisticsToCSV(stats *Statistics,
 	rw.Flush()
 	fr.Close()
 	return rw.Error()
+}
+
+func ToCSV(dir string, statistics *stats.Statistics, servers []*model.Server) error {
+	err := os.MkdirAll(dir, 0o755)
+	if err != nil {
+		return err
+	}
+	if strings.HasSuffix(dir, "/") {
+		dir = dir[:len(dir)-1]
+	}
+	err = writeServersCfgToCSV(servers, fmt.Sprintf("%s/servers.csv", dir))
+	if err != nil {
+		return err
+	}
+	err = writeSummaryToCSV(statistics, servers, fmt.Sprintf("%s/summary.csv", dir))
+	if err != nil {
+		return err
+	}
+	err = writeSnapshotsToCSV(servers, fmt.Sprintf("%s/snapshots.csv", dir))
+	if err != nil {
+		return err
+	}
+	err = writeStatisticsToCSV(statistics,
+		fmt.Sprintf("%s/arrivals.csv", dir),
+		fmt.Sprintf("%s/requests.csv", dir),
+		fmt.Sprintf("%s/drops.csv", dir))
+	if err != nil {
+		return err
+	}
+	return nil
 }
