@@ -23,7 +23,9 @@ go.work.sum
 
 # env file
 .env
-/temp*
-/results*
-/csv*
-/plots*
+
+# custom
+temp/
+results/
+csv/
+plots/

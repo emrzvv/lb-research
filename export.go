@@ -88,10 +88,11 @@ func writeStatisticsToCSV(stats *Statistics,
 	}
 
 	aw := csv.NewWriter(fa)
-	_ = aw.Write([]string{"time_s"})
+	_ = aw.Write([]string{"time_s", "session_id"})
 	for _, event := range stats.Arrivals {
 		aw.Write([]string{
 			fmt.Sprintf("%.5f", event.T),
+			fmt.Sprintf("%d", event.SessionID),
 		})
 	}
 	aw.Flush()
@@ -111,10 +112,11 @@ func writeStatisticsToCSV(stats *Statistics,
 	}
 	dw := csv.NewWriter(fd)
 
-	_ = dw.Write([]string{"server_id", "time_s", "reason"})
+	_ = dw.Write([]string{"server_id", "session_id", "time_s", "reason"})
 	for _, event := range stats.Drops {
 		dw.Write([]string{
 			fmt.Sprintf("%d", event.ServerID),
+			fmt.Sprintf("%d", event.SessionID),
 			fmt.Sprintf("%.5f", event.T),
 			fmt.Sprintf("%s", event.Reason),
 		})
@@ -126,10 +128,11 @@ func writeStatisticsToCSV(stats *Statistics,
 	fd.Close()
 
 	rw := csv.NewWriter(fr)
-	_ = rw.Write([]string{"server_id", "start_s", "end_s", "duration"})
+	_ = rw.Write([]string{"server_id", "session_id", "start_s", "end_s", "duration"})
 	for _, event := range stats.ServerRequests {
 		rw.Write([]string{
 			fmt.Sprintf("%d", event.ServerID),
+			fmt.Sprintf("%d", event.SessiontID),
 			fmt.Sprintf("%.5f", event.T1),
 			fmt.Sprintf("%.5f", event.T2),
 			fmt.Sprintf("%.5f", event.Duration),
