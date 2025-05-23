@@ -29,10 +29,13 @@ const (
 
 const (
 	owdTick       = 1.0   // шаг обновления OWD
-	owdJitterSTD  = 10.0  // разброс джиттера, мс
 	pSpike        = 0.002 // 0.2% шанс спайка на каждом тике
 	spikeExtra    = 300.0 // мс добавки при спайке
 	spikeDuration = 5.0   // длительность спайка
+)
+
+const (
+	userPool = 50_000
 )
 
 var (
@@ -69,20 +72,23 @@ type Statistics struct {
 }
 
 type ArrivalEvent struct {
-	T float64
+	T         float64
+	SessionID int64
 }
 
 type RequestEvent struct {
-	ServerID int
-	T1       float64
-	T2       float64
-	Duration float64
+	ServerID   int
+	SessiontID int64
+	T1         float64
+	T2         float64
+	Duration   float64
 }
 
 type DropEvent struct {
-	ServerID int
-	T        float64
-	Reason   string
+	ServerID  int
+	SessionID int64
+	T         float64
+	Reason    string
 }
 
 type ServerSnapshot struct {
@@ -108,15 +114,16 @@ type Spike struct {
 }
 
 // пока безочередное обслуживание. превышаем кол-во допустимых соединений => отказ
-func (s *Server) HandleRequest(p simgo.Process, start float64, statistics *Statistics) bool {
+func (s *Server) HandleRequest(p simgo.Process, start float64, sessionID int64, statistics *Statistics) bool {
 	s.mu.Lock()
 	if s.CurrentConnections >= s.Parameters.MaxConnections {
 		s.mu.Unlock()
 		statistics.mu.Lock()
 		statistics.Drops = append(statistics.Drops, &DropEvent{
-			ServerID: s.ID,
-			T:        start,
-			Reason:   "max_conn",
+			ServerID:  s.ID,
+			SessionID: sessionID,
+			T:         start,
+			Reason:    "max_conn",
 		})
 		statistics.mu.Unlock()
 		return false
@@ -132,10 +139,11 @@ func (s *Server) HandleRequest(p simgo.Process, start float64, statistics *Stati
 	s.mu.Unlock()
 	statistics.mu.Lock()
 	statistics.ServerRequests = append(statistics.ServerRequests, &RequestEvent{
-		ServerID: s.ID,
-		T1:       start,
-		T2:       start + duration,
-		Duration: duration,
+		ServerID:   s.ID,
+		SessiontID: sessionID,
+		T1:         start,
+		T2:         start + duration,
+		Duration:   duration,
 	})
 	statistics.mu.Unlock()
 	return true
@@ -197,6 +205,10 @@ func randomFragments() int {
 	return 10 // fallback
 }
 
+func chooseSession() int64 {
+	return int64(rand.Intn(userPool) + 1)
+}
+
 func generateRequest(p simgo.Process,
 	sim *simgo.Simulation,
 	balancer Balancer,
@@ -246,8 +258,9 @@ func generateRequest(p simgo.Process,
 		}
 		p.Wait(p.Timeout(ia))
 		now := p.Now()
+		sessionID := chooseSession()
 		statistics.mu.Lock()
-		statistics.Arrivals = append(statistics.Arrivals, &ArrivalEvent{T: now})
+		statistics.Arrivals = append(statistics.Arrivals, &ArrivalEvent{T: now, SessionID: sessionID})
 		statistics.mu.Unlock()
 		pickedServer := balancer.PickServer()
 		statistics.mu.Lock()
@@ -257,7 +270,7 @@ func generateRequest(p simgo.Process,
 			fragments := randomFragments()
 			for n := 0; n < fragments; n++ {
 				startFrag := session.Now()
-				ok := pickedServer.HandleRequest(session, startFrag, statistics)
+				ok := pickedServer.HandleRequest(session, startFrag, sessionID, statistics)
 				if !ok {
 					break
 				}
@@ -283,8 +296,8 @@ func main() {
 		// normalMbps := distuv.Normal{Mu: meanMbps, Sigma: stdMbps, Src: rand.NewSource(time.Now().UnixNano())}
 		// normalRTT  := distuv.Normal{Mu: meanRTT, Sigma: stdRTT, Src: rand.NewSource(time.Now().UnixNano())}
 
-		mbps := rand.NormFloat64()*stdMbps + meanMbps
-		owd := rand.NormFloat64()*stdOWD + meanOWD
+		mbps := rand.NormFloat64()*stdMbps + meanMbps // TODO: new distribution needed
+		owd := randGamma(meanOWD, stdOWD/meanOWD)
 
 		p := &ServerParameters{
 			Mbps:           mbps,
@@ -324,12 +337,7 @@ func main() {
 					continue
 				}
 
-				jitter := rand.NormFloat64() * owdJitterSTD
-				newOWD := base + jitter
-				if newOWD < 50.0 { // fallback
-					newOWD = 50.0
-				}
-				s.CurrentOWD = newOWD
+				s.CurrentOWD = randGamma(meanOWD, stdOWD/meanOWD)
 				s.mu.Unlock()
 			}
 		})

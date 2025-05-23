@@ -199,4 +199,34 @@ else:
     g.savefig("plots/owd_grid.png")
     plt.close(g.fig)
 
+# 8.1 DISTRIBUTION OF OWD PER SERVER
+# один facet-grid: по столбцам server_id, внутри — гистограмма + KDE
+bins = 40                     # мелкие столбики, чтобы был «хвост»
+cols = 5                      # сколько графиков в строке
+g = sns.FacetGrid(
+        snaps,
+        col="server_id",
+        col_wrap=cols,
+        sharex=False,  # задержки разных серверов могут отличаться по масштабам
+        sharey=False,
+        height=2.4,
+        aspect=1.3,
+)
+
+g.map_dataframe(sns.histplot,
+                x="owd_ms",
+                bins=bins,
+                kde=True,      # поверх гистограммы — сглаженная плотность
+                linewidth=0)
+
+g.set_titles("srv {col_name}")
+g.set_axis_labels("OWD (ms)", "count")
+for ax in g.axes.flatten():
+    ax.grid(True, linestyle=":", linewidth=0.5, alpha=0.6)
+
+plt.subplots_adjust(top=0.88)
+g.fig.suptitle("Distribution of one-way delay (OWD) per server")
+g.savefig("plots/owd_dist.png")
+plt.close(g.fig)
+
 print("PNG-файлы сохранены в ./plots")
