@@ -1,0 +1,36 @@
+simulation:
+  time_seconds: 600     # длительность моделирования, сек
+  step_seconds: 1       # шаг снимков нагрузки (snapshots), сек
+
+traffic:
+  base_rps: 200         # средняя интенсивность поступления сессий (λ)
+  users_amount: 10000   # размер пула уникальных пользователей (sessionID)
+
+# сценарий всплесков нагрузки («бурстов»)
+spikes:
+  - at: 120             # t = 120 с
+    duration: 30        # 30 с
+    factor: 5           # *5 от base_rps
+  - at: 300
+    duration: 60
+    factor: 3
+  - at: 450
+    duration: 25
+    factor: 2
+
+cluster:
+  servers: 10            # число серверов в кластере
+  bitrate: 4            # Mbps: битрейт одного Full-HD потока
+  cap_mean_mbps: 500    # средняя пропускная способность сервера
+  cap_cv: 0.2           # CV (σ/μ) пропускной способности
+  owd_mean: 100         # средний one-way delay, мс
+  owd_cv: 0.3           # CV задержки
+
+jitter:
+  tick_s: 1             # период обновления OWD, сек
+  spike_prob: 0.002     # вероятность «лаг-спайка» на каждом тике
+  spike_extra: 300      # +мс к OWD при спайке
+  spike_duration_s: 5   # длительность сетевого спайка, сек
+
+balancer:
+  strategy: "rr"        # базовый алгоритм (например: rr, random, ch, ch+wlc …)
