@@ -1,6 +1,7 @@
 simulation:
   time_seconds: 600     # длительность моделирования, сек
   step_seconds: 1       # шаг снимков нагрузки (snapshots), сек
+  seed: 42
 
 traffic:
   base_rps: 200         # средняя интенсивность поступления сессий (λ)

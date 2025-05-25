@@ -82,6 +82,7 @@ func (chb *CHBalancer) PickServer(sessionID int64) *model.Server {
 	s := chb.ring.get(sh)
 	chb.mu.Unlock()
 	if s.IsOverLoaded() && chb.next != nil {
+		fmt.Println("picked random")
 		return chb.next.PickServer(sessionID)
 	}
 	return s
