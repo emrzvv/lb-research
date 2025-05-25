@@ -52,6 +52,10 @@ func (s *Server) Unlock() {
 	s.mu.Unlock()
 }
 
+func (s *Server) IsOverLoaded() bool {
+	return s.CurrentConnections >= s.Parameters.MaxConnections
+}
+
 type Spike struct {
 	At       float64
 	Duration float64

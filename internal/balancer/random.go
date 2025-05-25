@@ -10,7 +10,7 @@ type RandomBalancer struct {
 	servers []*model.Server
 }
 
-func (b *RandomBalancer) PickServer() *model.Server {
+func (b *RandomBalancer) PickServer(sessionID int64) *model.Server {
 	return b.servers[rand.Intn(len(b.servers))]
 }
 

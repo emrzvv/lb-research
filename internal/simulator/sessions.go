@@ -36,7 +36,7 @@ func generateSessions(
 		sessionID := chooseSession(cfg)
 		st.AddArrival(&stats.ArrivalEvent{T: now, SessionID: sessionID})
 
-		pickedServer := balancer.PickServer()
+		pickedServer := balancer.PickServer(sessionID)
 		st.AddPick(pickedServer.ID - 1)
 
 		sim.Process(func(session simgo.Process) {

@@ -12,7 +12,7 @@ type RRBalancer struct {
 	idx     int
 }
 
-func (b *RRBalancer) PickServer() *model.Server {
+func (b *RRBalancer) PickServer(sessionID int64) *model.Server {
 	b.mu.Lock()
 	b.idx = (b.idx + 1) % len(b.servers)
 	b.mu.Unlock()

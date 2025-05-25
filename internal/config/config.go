@@ -47,7 +47,8 @@ type Config struct {
 	} `yaml:"jitter"`
 
 	Balancer struct {
-		Strategy string `yaml:"strategy"`
+		Strategy   string `yaml:"strategy"`
+		CHReplicas int    `yaml:"ch_replicas"`
 	} `yaml:"balancer"`
 }
 
@@ -123,6 +124,9 @@ func fillDefaults(c *Config) {
 	}
 	if c.Balancer.Strategy == "" {
 		c.Balancer.Strategy = "ch"
+	}
+	if c.Balancer.CHReplicas == 0 {
+		c.Balancer.CHReplicas = 100
 	}
 
 	c.Cluster.SegmentSizeBytes = c.Cluster.Bitrate * 1_000_000 / 8 * c.Cluster.SegmentDuration

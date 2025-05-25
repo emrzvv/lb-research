@@ -111,27 +111,32 @@ plt.tight_layout()
 plt.savefig(os.path.join(PLOT_DIR, "heatmap_connections.png"))
 plt.close()
 
-# ==== 5. Drops (if any) ========================================================
+# ==== 5. Drops & barplots =====================================================
 if not drops.empty:
     fig3, (ax1, ax2) = plt.subplots(2, 1, figsize=(30, 20))
     drops["bin"] = (drops.time_s // 1.0) * 1.0
     mix = drops.groupby("bin").size().reset_index(name="drops")
     ax1.bar(mix["bin"], mix["drops"], color="tab:red", width=0.8)
     ax1.set(title="Drops per bin", ylabel="drops", xlabel="time (s)")
-    n_bins = len(mix["bin"])
-    xticks = mix["bin"].values
-    tick_step = max(1, n_bins // 20)
-    ax1.set_xticks(xticks[::tick_step])
-    ax1.set_xticklabels([f"{int(x):d}" for x in xticks[::tick_step]], rotation=90, ha='center')
-
+    xt, n_bins = mix["bin"].values, len(mix)
+    ax1.set_xticks(xt[::max(1, n_bins // 20)])
+    ax1.set_xticklabels([int(x) for x in xt[::max(1, n_bins // 20)]],
+                        rotation=90, ha='center')
     bar = drops.groupby("server_id").size().reset_index(name="drops")
-    sns.barplot(data=bar, x="server_id", y="drops", palette=palette, ax=ax2)
+    sns.barplot(data=bar, x="server_id", y="drops",
+                palette=palette, ax=ax2)
     adjust_xticks(ax2, n_srv)
     ax2.set(title="Total drops per server", xlabel="server", ylabel="drops")
+    fig3.tight_layout(); fig3.savefig(os.path.join(PLOT_DIR, "drops.png")); plt.close(fig3)
 
-    fig3.tight_layout()
-    fig3.savefig(os.path.join(PLOT_DIR, "drops.png"))
-    plt.close(fig3)
+    # ---- 5.1 Heatmap drops  ---------------------------------------------------
+    heat_d = drops.groupby(["server_id", "bin"]).size().unstack(fill_value=0)
+    fig_w = max(8, heat_d.shape[1] * 0.05)
+    plt.figure(figsize=(fig_w, 10))
+    sns.heatmap(heat_d, cmap="rocket_r", cbar_kws={"label": "drops"}, yticklabels=True)
+    plt.title("Drops per server / bin 1s")
+    plt.xlabel("time (s)"); plt.ylabel("server")
+    plt.tight_layout(); plt.savefig(os.path.join(PLOT_DIR, "heatmap_drops.png")); plt.close()
 
 # ==== 6. Config + Summary ======================================================
 fig, (ax_t, ax_b, ax_c) = plt.subplots(3, 1, figsize=(30, 20))

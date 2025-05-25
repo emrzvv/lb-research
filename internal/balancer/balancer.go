@@ -8,7 +8,7 @@ import (
 )
 
 type Balancer interface {
-	PickServer() *model.Server
+	PickServer(sessionID int64) *model.Server
 	GetServers() []*model.Server
 }
 
@@ -24,6 +24,8 @@ func NewBalancer(cfg *config.Config, servers []*model.Server) Balancer {
 		return &RandomBalancer{
 			servers: servers,
 		}
+	case "ch":
+		return NewCHBalancer(servers, 100, nil)
 	default:
 		panic("no such strategy has been implemented")
 	}
