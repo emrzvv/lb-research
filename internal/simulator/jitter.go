@@ -1,8 +1,7 @@
 package simulator
 
 import (
-	"math/rand/v2"
-
+	"github.com/emrzvv/lb-research/internal/common"
 	"github.com/emrzvv/lb-research/internal/config"
 	"github.com/emrzvv/lb-research/internal/model"
 	"github.com/fschuetz04/simgo"
@@ -11,7 +10,8 @@ import (
 func jitterTick(
 	proc simgo.Process,
 	cfg *config.Config,
-	server *model.Server) {
+	server *model.Server,
+	rng *common.RNG) {
 
 	base := server.Parameters.OWD
 	for proc.Now() < cfg.Simulation.TimeSeconds {
@@ -24,14 +24,14 @@ func jitterTick(
 			continue
 		}
 
-		if rand.Float64() < cfg.Jitter.SpikeP {
+		if rng.Float64() < cfg.Jitter.SpikeP {
 			server.SpikeUntil = now + cfg.Jitter.SpikeDur
 			server.CurrentOWD = base + cfg.Jitter.SpikeExtra
 			server.Unlock()
 			continue
 		}
 
-		server.CurrentOWD = model.RandGamma(cfg.Cluster.OWDMean, cfg.Cluster.OWDCV)
+		server.CurrentOWD = model.RandGamma(cfg.Cluster.OWDMean, cfg.Cluster.OWDCV, rng)
 		server.Unlock()
 	}
 }

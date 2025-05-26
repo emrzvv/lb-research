@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -11,6 +12,7 @@ type Config struct {
 	Simulation struct {
 		TimeSeconds float64 `yaml:"time_seconds"` // общая продолжительность симуляции
 		StepSeconds float64 `yaml:"step_seconds"` // шаг симуляции (для сбора snapshot'ов, построения графиков)
+		Seed        int64   `yaml:"seed"`
 	} `yaml:"simulation"`
 
 	Traffic struct {
@@ -47,7 +49,8 @@ type Config struct {
 	} `yaml:"jitter"`
 
 	Balancer struct {
-		Strategy string `yaml:"strategy"`
+		Strategy   string `yaml:"strategy"`
+		CHReplicas int    `yaml:"ch_replicas"`
 	} `yaml:"balancer"`
 }
 
@@ -78,6 +81,9 @@ func fillDefaults(c *Config) {
 	}
 	if c.Simulation.StepSeconds == 0 {
 		c.Simulation.StepSeconds = 1
+	}
+	if c.Simulation.Seed == 0 {
+		c.Simulation.Seed = time.Now().UnixNano()
 	}
 	if c.Traffic.BaseRPS == 0 {
 		c.Traffic.BaseRPS = 200
@@ -123,6 +129,9 @@ func fillDefaults(c *Config) {
 	}
 	if c.Balancer.Strategy == "" {
 		c.Balancer.Strategy = "ch"
+	}
+	if c.Balancer.CHReplicas == 0 {
+		c.Balancer.CHReplicas = 100
 	}
 
 	c.Cluster.SegmentSizeBytes = c.Cluster.Bitrate * 1_000_000 / 8 * c.Cluster.SegmentDuration

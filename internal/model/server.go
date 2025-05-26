@@ -4,6 +4,7 @@ import (
 	"math"
 	"sync"
 
+	"github.com/emrzvv/lb-research/internal/common"
 	"github.com/emrzvv/lb-research/internal/config"
 )
 
@@ -52,17 +53,24 @@ func (s *Server) Unlock() {
 	s.mu.Unlock()
 }
 
+func (s *Server) IsOverLoaded() bool {
+	s.mu.Lock()
+	result := s.CurrentConnections >= s.Parameters.MaxConnections
+	s.mu.Unlock()
+	return result
+}
+
 type Spike struct {
 	At       float64
 	Duration float64
 	Factor   float64
 }
 
-func InitServers(cfg *config.Config) []*Server {
+func InitServers(cfg *config.Config, rng *common.RNG) []*Server {
 	var servers []*Server
 	for i := range cfg.Cluster.Servers {
-		mbps := RandNormal(cfg.Cluster.CapMean, cfg.Cluster.CapCV)
-		owd := RandGamma(cfg.Cluster.OWDMean, cfg.Cluster.OWDCV)
+		mbps := RandNormal(cfg.Cluster.CapMean, cfg.Cluster.CapCV, rng)
+		owd := RandGamma(cfg.Cluster.OWDMean, cfg.Cluster.OWDCV, rng)
 
 		p := &ServerParameters{
 			Mbps:           mbps,

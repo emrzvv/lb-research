@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/emrzvv/lb-research/internal/balancer"
+	"github.com/emrzvv/lb-research/internal/common"
 	"github.com/emrzvv/lb-research/internal/config"
 	"github.com/emrzvv/lb-research/internal/model"
 	"github.com/emrzvv/lb-research/internal/stats"
@@ -29,7 +30,7 @@ func (r *rateCtrl) Set(v float64) {
 	r.mu.Unlock()
 }
 
-func Run(cfg *config.Config, servers []*model.Server, balancer balancer.Balancer) *stats.Statistics {
+func Run(cfg *config.Config, servers []*model.Server, balancer balancer.Balancer, rng *common.RNG) *stats.Statistics {
 	simulation := simgo.NewSimulation()
 	statistics := stats.NewStatistics(cfg)
 
@@ -37,11 +38,13 @@ func Run(cfg *config.Config, servers []*model.Server, balancer balancer.Balancer
 
 	simulation.Process(func(proc simgo.Process) { collectSnapshots(proc, cfg, servers) })
 	simulation.Process(func(proc simgo.Process) { generateSpikes(proc, cfg, rc) })
-	simulation.Process(func(proc simgo.Process) { generateSessions(proc, simulation, cfg, rc, balancer, servers, statistics) })
+	simulation.Process(func(proc simgo.Process) {
+		generateSessions(proc, simulation, cfg, rc, balancer, servers, statistics, rng)
+	})
 
 	for _, srv := range servers {
 		s := srv
-		simulation.Process(func(proc simgo.Process) { jitterTick(proc, cfg, s) })
+		simulation.Process(func(proc simgo.Process) { jitterTick(proc, cfg, s, rng) })
 	}
 
 	simulation.RunUntil(cfg.Simulation.TimeSeconds)

@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/emrzvv/lb-research/internal/balancer"
+	"github.com/emrzvv/lb-research/internal/common"
 	"github.com/emrzvv/lb-research/internal/config"
 	"github.com/emrzvv/lb-research/internal/export"
 	"github.com/emrzvv/lb-research/internal/model"
@@ -22,14 +23,14 @@ func main() {
 	}
 
 	// fmt.Printf("%v", cfg)
+	rng := common.NewRNG(cfg.Simulation.Seed)
+	servers := model.InitServers(cfg, rng)
 
-	servers := model.InitServers(cfg)
-
-	b := balancer.NewBalancer(cfg, servers)
+	b := balancer.BuildChain(cfg, servers, rng)
 	if err != nil {
 		log.Fatal(err)
 	}
-	st := simulator.Run(cfg, servers, b)
+	st := simulator.Run(cfg, servers, b, rng)
 
 	export.ToCSV(*outDir, st, servers)
 }
