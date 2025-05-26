@@ -62,17 +62,15 @@ type CHBalancer struct {
 	servers  []*model.Server
 	ring     *ring
 	replicas int
-	next     Balancer
 }
 
-func NewCHBalancer(servers []*model.Server, replicas int, next Balancer) *CHBalancer {
+func NewCHBalancer(servers []*model.Server, replicas int) *CHBalancer {
 	ring := newRing(servers, replicas)
 	return &CHBalancer{
 		mu:       sync.Mutex{},
 		servers:  servers,
 		ring:     ring,
 		replicas: replicas,
-		next:     next,
 	}
 }
 
@@ -81,9 +79,8 @@ func (chb *CHBalancer) PickServer(sessionID int64) *model.Server {
 	chb.mu.Lock()
 	s := chb.ring.get(sh)
 	chb.mu.Unlock()
-	if s.IsOverLoaded() && chb.next != nil {
-		fmt.Println("picked random")
-		return chb.next.PickServer(sessionID)
+	if s.IsOverLoaded() {
+		return nil
 	}
 	return s
 }

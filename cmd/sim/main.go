@@ -26,7 +26,7 @@ func main() {
 	rng := common.NewRNG(cfg.Simulation.Seed)
 	servers := model.InitServers(cfg, rng)
 
-	b := balancer.NewBalancer(cfg, servers, rng)
+	b := balancer.BuildChain(cfg, servers, rng)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -34,5 +34,5 @@ jitter:
   spike_duration_s: 5   # длительность сетевого спайка, сек
 
 balancer:
-  strategy: "ch"        # базовый алгоритм (например: rr, random, ch, ch+wlc …)
+  strategy: "ch+p2c"        # базовый алгоритм (например: rr, random, ch, ch+wlc …)
   ch_replicas: 100

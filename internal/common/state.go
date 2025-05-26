@@ -7,7 +7,7 @@ import (
 )
 
 type RNG struct {
-	rnd *rand.Rand // ← обычное поле, а не embed
+	rnd *rand.Rand // TODO: разобраться, почему с embed возникают проблемы
 	mu  sync.Mutex
 }
 
@@ -17,8 +17,6 @@ func NewRNG(seed int64) *RNG {
 	}
 	return &RNG{rnd: rand.New(rand.NewSource(seed)), mu: sync.Mutex{}}
 }
-
-/* потокобезопасные обёртки */
 
 func (r *RNG) Float64() float64 {
 	r.mu.Lock()

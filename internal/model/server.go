@@ -54,7 +54,10 @@ func (s *Server) Unlock() {
 }
 
 func (s *Server) IsOverLoaded() bool {
-	return s.CurrentConnections >= s.Parameters.MaxConnections
+	s.mu.Lock()
+	result := s.CurrentConnections >= s.Parameters.MaxConnections
+	s.mu.Unlock()
+	return result
 }
 
 type Spike struct {
