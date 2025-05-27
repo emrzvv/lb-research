@@ -46,6 +46,9 @@ func BuildChain(cfg *config.Config, servers []*model.Server, rng *common.RNG) Ba
 		"p2c": func(s []*model.Server, c *config.Config, r *common.RNG) Balancer {
 			return NewP2CBalancer(servers, rng)
 		},
+		"peak_ewma": func(s []*model.Server, c *config.Config, r *common.RNG) Balancer {
+			return NewPeakEWMABalancer(servers, 0.1)
+		},
 	}
 
 	strategies := strings.Split(cfg.Balancer.Strategy, "+")

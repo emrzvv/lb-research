@@ -111,6 +111,26 @@ plt.tight_layout()
 plt.savefig(os.path.join(PLOT_DIR, "heatmap_connections.png"))
 plt.close()
 
+# ==== 4.1  Heat-map utilisation (= active / max_conn) ===========================
+bin_h = 1.0
+snaps["bin"] = (snaps.time_s // bin_h) * bin_h          # тот же бин, что и раньше
+
+max_conn = cfg.set_index("id")["max_conn"]              # Series: id -> max_conn
+snaps["util"] = snaps.connections / snaps.server_id.map(max_conn)
+
+heat_u = snaps.groupby(["server_id", "bin"]).util.max().unstack(fill_value=0)
+
+fig_w_u = max(8, heat_u.shape[1] * 0.05)
+plt.figure(figsize=(fig_w_u, 10))
+sns.heatmap(heat_u, cmap="rocket_r", vmin=0, vmax=1,
+            cbar_kws={"label": "utilisation"}, yticklabels=True)
+plt.title(f"Utilisation (connections / max_conn) / bin {bin_h:.0f}s")
+plt.xlabel("time (s)")
+plt.ylabel("server")
+plt.tight_layout()
+plt.savefig(os.path.join(PLOT_DIR, "heatmap_utilisation.png"))
+plt.close()
+
 # ==== 5. Drops & barplots =====================================================
 if not drops.empty:
     fig3, (ax1, ax2) = plt.subplots(2, 1, figsize=(30, 20))
@@ -201,5 +221,53 @@ plt.subplots_adjust(top=0.88)
 g.fig.suptitle("Distribution of one-way delay (OWD) per server")
 g.savefig(os.path.join(PLOT_DIR, "owd_dist.png"))
 plt.close(g.fig)
+
+# ==== 8. Global RTT-distribution ==============================================
+
+
+plt.figure(figsize=(12, 6))
+req["rtt_ms"] = req.duration * 1_000
+
+bins = 120                                       
+sns.histplot(data=req, x="rtt_ms", bins=bins,
+             kde=True, kde_kws={"bw_adjust": .7},
+             color="tab:blue", edgecolor=None)
+plt.title("Distribution of RTT for all requests")
+plt.xlabel("RTT (ms)")
+plt.ylabel("requests")
+
+# показываем логарифмическую ось X, если хвост длинный
+if req.rtt_ms.max() / req.rtt_ms.min() > 100:
+    plt.xscale("log")
+    plt.xlabel("RTT (ms) – log scale")
+
+plt.tight_layout()
+plt.savefig(os.path.join(PLOT_DIR, "rtt_distribution.png"))
+plt.close()
+
+# ==== 9. Fairness & CV over time (cluster utilisation) ========================
+util = snaps.copy()
+util["u"] = util.connections / cfg.set_index("id").loc[util.server_id, "max_conn"].values
+
+# Jain & CV каждые step_s
+step_s = 1.0
+util["bin"] = (util.time_s // step_s) * step_s
+agg = util.groupby("bin").u.agg(["mean", "std", "sum", "count"])
+agg["jain"] = agg["sum"]**2 / (agg["count"] * (util.groupby("bin").u.apply(lambda x: (x**2).sum())))
+agg["cv"]   = agg["std"] / agg["mean"]
+
+fig, ax1 = plt.subplots(figsize=(14,6))
+ax1.plot(agg.index, agg.jain, label="Jain fairness", lw=2)
+ax1.set_ylabel("Jain index J(t)")
+ax1.set_ylim(0,1); ax1.set_xlabel("time (s)")
+ax2 = ax1.twinx()
+ax2.plot(agg.index, agg.cv, label="CV utilisation", color="tab:red", lw=1.2)
+ax2.set_ylabel("CV(t)")
+
+ax1.legend(loc="upper left"); ax2.legend(loc="upper right")
+plt.title("Cluster load balance over time")
+plt.tight_layout()
+plt.savefig(os.path.join(PLOT_DIR, "fairness_cv.png"))
+plt.close()
 
 print(f"PNG-файлы сохранены в {PLOT_DIR}")
