@@ -6,6 +6,7 @@ import (
 	"github.com/emrzvv/lb-research/internal/balancer"
 	"github.com/emrzvv/lb-research/internal/common"
 	"github.com/emrzvv/lb-research/internal/config"
+	"github.com/emrzvv/lb-research/internal/metric"
 	"github.com/emrzvv/lb-research/internal/model"
 	"github.com/emrzvv/lb-research/internal/stats"
 	"github.com/fschuetz04/simgo"
@@ -91,6 +92,16 @@ func handleRequest(
 		T2:         start + duration,
 		Duration:   duration,
 	})
+	if ch := metric.RTTChan; ch != nil {
+		select {
+		case ch <- metric.RequestRTT{
+			ServerID: s.ID,
+			RTT:      duration,
+			When:     start,
+		}:
+		default:
+		}
+	}
 
 	return true
 }
