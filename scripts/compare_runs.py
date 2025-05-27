@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+compare_runs.py  сравнивает несколько прогонов симуляции.
+
+Принимает 1...N директорий, в каждой должны лежать результаты симуляций *.csv.
+Строит графики:
+    - fairness_compare.png - Jain-fairness(t)
+    - cv_compare.png       - коэффициент вариации CV(t)
+    - drops_compare.png    - динамика отказов на бин BIN
+Пример запуска:
+    python3 compare_runs.py out/exp1/csv out/exp2/csv -b 2 -o results/plots
+"""
+
+import os, argparse, warnings, pathlib
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# ──────────────────────── CLI ──────────────────────────────────────────────
+p = argparse.ArgumentParser()
+p.add_argument("runs", nargs="+",
+               help="пути к каталогам с CSV-файлами (snapshots.csv, servers.csv)")
+p.add_argument("-b", "--bin", type=float, default=1.0,
+               help="шаг агрегации по времени, сек (default: 1)")
+p.add_argument("-o", "--out-dir", default="./plots",
+               help="куда сохранять PNG-графики (default: текущая папка)")
+args = p.parse_args()
+
+BIN  = args.bin
+OUT  = os.path.abspath(args.out_dir)
+os.makedirs(OUT, exist_ok=True)
+
+warnings.filterwarnings("ignore", category=FutureWarning)
+sns.set_theme(style="whitegrid")
+
+# ──────────────────────── helpers ──────────────────────────────────────────
+def load(csv_dir: str, name: str) -> pd.DataFrame:
+    return pd.read_csv(os.path.join(csv_dir, name))
+
+def jain_and_cv(csv_dir: str) -> tuple[pd.Series, pd.Series]:
+    """
+    Возвращает две Series (fairness, cv) c индексом bin-time.
+    """
+    snaps   = load(csv_dir, "snapshots.csv")   # time_s, server_id, connections
+    servers = load(csv_dir, "servers.csv")     # id, max_conn
+    max_conn = servers.set_index("id")["max_conn"]
+
+    snaps["util"] = snaps.connections / snaps.server_id.map(max_conn)
+    snaps["bin"]  = (snaps.time_s // BIN) * BIN
+
+    fair, cv = {}, {}
+    for t, grp in snaps.groupby("bin"):
+        u = grp.util.values
+        if len(u) == 0:             # safety
+            continue
+        fair[t] = (u.sum()**2) / (len(u) * (u**2).sum())
+        cv[t]   = u.std(ddof=0) / u.mean() if u.mean() else np.nan
+    return (pd.Series(fair).sort_index(),
+            pd.Series(cv).sort_index())
+
+def drops_series(csv_dir: str) -> pd.Series | None:
+    path = os.path.join(csv_dir, "drops.csv")
+    if not os.path.exists(path):
+        return None
+    drops = pd.read_csv(path)
+    drops["bin"] = (drops.time_s // BIN) * BIN
+    s = drops.groupby("bin").size()
+    return s.sort_index()
+
+# ──────────────────────── обход всех прогонов ──────────────────────────────
+fair_dict, cv_dict, drops_dict, total_drops = {}, {}, {}, {}
+for run in args.runs:
+    lbl = pathlib.Path(run.rstrip("/\\")).name
+    fairness, cv = jain_and_cv(run)
+    fair_dict[lbl] = fairness
+    cv_dict[lbl]   = cv
+
+    s_drop = drops_series(run)
+    if s_drop is not None:
+        drops_dict[lbl]      = s_drop
+        total_drops[lbl]     = int(s_drop.sum())
+    else:
+        print(f"[info] {lbl}: drops.csv не найден")
+
+# ──────────────────────── 1. Jain fairness(t) ──────────────────────────────
+plt.figure(figsize=(12, 6))
+for lbl, series in fair_dict.items():
+    sns.lineplot(x=series.index, y=series.values, label=lbl)
+plt.ylim(0, 1)
+plt.ylabel("Jain fairness J(t)")
+plt.xlabel("time (s)")
+plt.title("Сравнение прогонов: Jain fairness")
+plt.legend(title="run")
+plt.tight_layout()
+plt.savefig(os.path.join(OUT, "fairness_compare.png"))
+plt.close()
+
+# ──────────────────────── 2. CV(t) ─────────────────────────────────────────
+plt.figure(figsize=(12, 6))
+for lbl, series in cv_dict.items():
+    sns.lineplot(x=series.index, y=series.values, label=lbl)
+plt.ylabel("CV(t)")
+plt.xlabel("time (s)")
+plt.title("Сравнение прогонов: коэффициент вариации CV")
+plt.legend(title="run")
+plt.tight_layout()
+plt.savefig(os.path.join(OUT, "cv_compare.png"))
+plt.close()
+
+# ──────────────────────── 3. Drops(t) ──────────────────────────────────────
+if drops_dict:
+    plt.figure(figsize=(12, 6))
+    for lbl, series in drops_dict.items():
+        sns.lineplot(x=series.index, y=series.values, label=lbl)
+    plt.ylabel(f"drops per {BIN:.0f}s bin")
+    plt.xlabel("time (s)")
+    plt.title("Отказы (drops) во времени")
+    plt.legend(title="run")
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUT, "drops_compare.png"))
+    plt.close()
+
+
+print(f"PNG-файлы сохранены в {OUT}")
