@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 # ──────────────────────── CLI ──────────────────────────────────────────────
 p = argparse.ArgumentParser()
 p.add_argument("runs", nargs="+",
-               help="пути к каталогам с CSV-файлами (snapshots.csv, servers.csv)")
+               help="пути к каталогам с CSV-файлами (snapshots.csv, servers.csv...)")
 p.add_argument("-b", "--bin", type=float, default=1.0,
                help="шаг агрегации по времени, сек (default: 1)")
 p.add_argument("-o", "--out-dir", default="./plots",
@@ -69,8 +69,16 @@ def drops_series(csv_dir: str) -> pd.Series | None:
     s = drops.groupby("bin").size()
     return s.sort_index()
 
+def redirects_series(csv_dir: str) -> pd.Series | None:
+    path = os.path.join(csv_dir, "redirects.csv")
+    if not os.path.exists(path):
+        return None
+    red = pd.read_csv(path)
+    red["bin"] = (red.time_s // BIN) * BIN
+    return red.groupby("bin").size().sort_index()
+
 # ──────────────────────── обход всех прогонов ──────────────────────────────
-fair_dict, cv_dict, drops_dict, total_drops = {}, {}, {}, {}
+fair_dict, cv_dict, drops_dict, total_drops, redirects_dict, total_redirects, rtt_dict = {}, {}, {}, {}, {}, {}, {}
 for run in args.runs:
     lbl = pathlib.Path(run.rstrip("/\\")).name
     fairness, cv = jain_and_cv(run)
@@ -83,6 +91,15 @@ for run in args.runs:
         total_drops[lbl]     = int(s_drop.sum())
     else:
         print(f"[info] {lbl}: drops.csv не найден")
+
+    s_red = redirects_series(run)
+    if s_red is not None:
+        redirects_dict[lbl]  = s_red
+        total_redirects[lbl] = int(s_red.sum())
+    else:
+        print(f"[info] {lbl}: redirects.csv не найден")
+    req = load(run, "requests.csv")           # есть всегда
+    rtt_dict[lbl] = req.duration.values
 
 # ──────────────────────── 1. Jain fairness(t) ──────────────────────────────
 plt.figure(figsize=(12, 6))
@@ -122,5 +139,40 @@ if drops_dict:
     plt.savefig(os.path.join(OUT, "drops_compare.png"))
     plt.close()
 
+# ──────────────────────── 4. Redirects(t) ─────────────────────────────────
+if redirects_dict:
+    # динамика
+    plt.figure(figsize=(12, 6))
+    for lbl, series in redirects_dict.items():
+        sns.lineplot(x=series.index, y=series.values, label=lbl)
+    plt.ylabel(f"redirects per {BIN:.0f}s bin")
+    plt.xlabel("time (s)")
+    plt.title("Переключения (redirects) во времени")
+    plt.legend(title="run")
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUT, "redirects_compare.png"))
+    plt.close()
+
+    # суммарно по прогонам
+    plt.figure(figsize=(8, 5))
+    runs = list(total_redirects.keys())
+    vals = [total_redirects[r] for r in runs]
+    sns.barplot(x=runs, y=vals)
+    plt.ylabel("total redirects")
+    plt.title("Суммарные redirect-ы по прогонам")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUT, "redirects_total_bar.png"))
+    plt.close()
+
+# ──────────────────────── 5. Распределение RTT per strategy ───────────────
+plt.figure(figsize=(12, 6))
+for lbl, arr in rtt_dict.items():
+    sns.histplot(arr, bins=int(BIN), stat="density",
+                 kde=True, element="step", fill=False, label=lbl)
+plt.xlabel("RTT (duration), s"); plt.ylabel("density")
+plt.title("Распределение RTT по стратегиям")
+plt.legend(title="run"); plt.tight_layout()
+plt.savefig(os.path.join(OUT, "rtt_distribution_compare.png")); plt.close()
 
 print(f"PNG-файлы сохранены в {OUT}")

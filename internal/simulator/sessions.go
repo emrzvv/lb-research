@@ -39,16 +39,59 @@ func generateSessions(
 		st.AddArrival(&stats.ArrivalEvent{T: now, SessionID: sessionID})
 
 		pickedServer := balancer.PickServer(sessionID)
+		if pickedServer == nil {
+			st.AddDrop(&stats.DropEvent{
+				ServerID: 0, SessionID: sessionID, T: now, Reason: "no_server"})
+			continue
+		}
 		st.AddPick(pickedServer.ID - 1)
 
 		sim.Process(func(session simgo.Process) {
 			fragments := model.RandomFragments(rng)
+
+			switches := 0
+
 			for n := 0; n < fragments; n++ {
-				startFrag := session.Now()
-				ok := handleRequest(pickedServer, session, startFrag, sessionID, cfg, st, rng)
-				if !ok {
-					break
+				retries := 0
+
+				for {
+					start := session.Now()
+					ok := handleRequest(pickedServer, session, start, sessionID, cfg, st, rng)
+					if ok {
+						break
+					}
+					retries++
+					if retries <= cfg.Cluster.MaxRetriesPerSegment {
+						continue
+					}
+
+					if switches >= cfg.Cluster.MaxSwitchesPerSession {
+						st.AddDrop(&stats.DropEvent{
+							ServerID:  pickedServer.ID,
+							SessionID: sessionID,
+							T:         start,
+							Reason:    "max_switches",
+						})
+						return
+					}
+
+					newPickedServer := balancer.PickServer(sessionID)
+					if newPickedServer == nil {
+						st.AddDrop(&stats.DropEvent{
+							ServerID: 0, SessionID: sessionID, T: now, Reason: "no_server"})
+						return
+					}
+					st.AddRedirect(&stats.RedirectEvent{
+						SessionID: sessionID,
+						FromID:    pickedServer.ID,
+						ToID:      newPickedServer.ID,
+						T:         start,
+					})
+					pickedServer = newPickedServer
+					switches++
+					retries = 0
 				}
+
 				session.Wait(session.Timeout(float64(cfg.Cluster.SegmentDuration)))
 			}
 		})

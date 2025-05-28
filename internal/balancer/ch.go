@@ -79,7 +79,9 @@ func (chb *CHBalancer) PickServer(sessionID int64) *model.Server {
 	chb.mu.Lock()
 	s := chb.ring.get(sh)
 	chb.mu.Unlock()
+	// fmt.Printf("server %d session %d\n", s.ID, sessionID)
 	if s.IsOverLoaded() {
+		// fmt.Printf("server %d overloaded for session %d\n", s.ID, sessionID)
 		return nil
 	}
 	return s

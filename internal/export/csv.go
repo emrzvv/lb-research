@@ -30,7 +30,7 @@ func writeServersCfgToCSV(servers []*model.Server, path string) error {
 	return w.Error()
 }
 
-func writeSummaryToCSV(stats *stats.Statistics, servers []*model.Server, path string) error {
+func writeSummaryToCSV(stats *stats.Statistics, servers []*model.Server, path, pathDropsNoServer string) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -44,7 +44,9 @@ func writeSummaryToCSV(stats *stats.Statistics, servers []*model.Server, path st
 	}
 	dropped := make([]int, len(servers))
 	for _, d := range stats.Drops {
-		dropped[d.ServerID-1]++
+		if d.ServerID != 0 {
+			dropped[d.ServerID-1]++
+		}
 	}
 	for i := range servers {
 		w.Write([]string{
@@ -55,7 +57,26 @@ func writeSummaryToCSV(stats *stats.Statistics, servers []*model.Server, path st
 		})
 	}
 	w.Flush()
-	return w.Error()
+	if err := w.Error(); err != nil {
+		return err
+	}
+
+	fd, err := os.Create(pathDropsNoServer)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	droppedNoServer := 0
+	wd := csv.NewWriter(fd)
+	_ = wd.Write([]string{"dropped_no_server"})
+	for _, d := range stats.Drops {
+		if d.ServerID == 0 {
+			droppedNoServer++
+		}
+	}
+	wd.Write([]string{fmt.Sprintf("%d", droppedNoServer)})
+	wd.Flush()
+	return wd.Error()
 }
 
 func writeSnapshotsToCSV(servers []*model.Server, path string) error {
@@ -85,7 +106,8 @@ func writeSnapshotsToCSV(servers []*model.Server, path string) error {
 func writeStatisticsToCSV(stats *stats.Statistics,
 	arrivalsPath,
 	requestsPath,
-	dropsPath string) error {
+	dropsPath,
+	redirectsPath string) error {
 	fa, err := os.Create(arrivalsPath)
 	if err != nil {
 		return err
@@ -143,8 +165,28 @@ func writeStatisticsToCSV(stats *stats.Statistics,
 		})
 	}
 	rw.Flush()
+	if err := rw.Error(); err != nil {
+		return err
+	}
 	fr.Close()
-	return rw.Error()
+
+	frd, err := os.Create(redirectsPath)
+	if err != nil {
+		return err
+	}
+	rwred := csv.NewWriter(frd)
+	_ = rwred.Write([]string{"session_id", "from_id", "to_id", "time_s"})
+	for _, ev := range stats.Redirects {
+		rwred.Write([]string{
+			fmt.Sprintf("%d", ev.SessionID),
+			fmt.Sprintf("%d", ev.FromID),
+			fmt.Sprintf("%d", ev.ToID),
+			fmt.Sprintf("%.5f", ev.T),
+		})
+	}
+	rwred.Flush()
+	frd.Close()
+	return rwred.Error()
 }
 
 func ToCSV(dir string, statistics *stats.Statistics, servers []*model.Server) error {
@@ -159,7 +201,10 @@ func ToCSV(dir string, statistics *stats.Statistics, servers []*model.Server) er
 	if err != nil {
 		return err
 	}
-	err = writeSummaryToCSV(statistics, servers, fmt.Sprintf("%s/summary.csv", dir))
+	err = writeSummaryToCSV(statistics,
+		servers,
+		fmt.Sprintf("%s/summary.csv", dir),
+		fmt.Sprintf("%s/summary_drops_no_server.csv", dir))
 	if err != nil {
 		return err
 	}
@@ -170,7 +215,8 @@ func ToCSV(dir string, statistics *stats.Statistics, servers []*model.Server) er
 	err = writeStatisticsToCSV(statistics,
 		fmt.Sprintf("%s/arrivals.csv", dir),
 		fmt.Sprintf("%s/requests.csv", dir),
-		fmt.Sprintf("%s/drops.csv", dir))
+		fmt.Sprintf("%s/drops.csv", dir),
+		fmt.Sprintf("%s/redirects.csv", dir))
 	if err != nil {
 		return err
 	}

@@ -39,6 +39,9 @@ type Config struct {
 		OWDCV   float64 `yaml:"owd_cv"`        // относительное ст. отклонение OWD
 
 		SigmaServer float64 `yaml:"sigma_server"` // CV лог-нормального шума
+
+		MaxRetriesPerSegment  int `yaml:"max_retries"`  // количество попыток запросить один и тот же .ts без смены сервера
+		MaxSwitchesPerSession int `yaml:"max_switches"` // сколько раз можем менять сервер во время получения одного видео
 	} `yaml:"cluster"`
 
 	Jitter struct {
@@ -114,6 +117,12 @@ func fillDefaults(c *Config) {
 	}
 	if c.Cluster.SigmaServer == 0 {
 		c.Cluster.SigmaServer = 0.25
+	}
+	if c.Cluster.MaxRetriesPerSegment == 0 {
+		c.Cluster.MaxRetriesPerSegment = 2
+	}
+	if c.Cluster.MaxSwitchesPerSession == 0 {
+		c.Cluster.MaxSwitchesPerSession = 4
 	}
 	if c.Jitter.Tick == 0 {
 		c.Jitter.Tick = 1
