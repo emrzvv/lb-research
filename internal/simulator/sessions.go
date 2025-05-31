@@ -1,12 +1,9 @@
 package simulator
 
 import (
-	"math"
-
 	"github.com/emrzvv/lb-research/internal/balancer"
 	"github.com/emrzvv/lb-research/internal/common"
 	"github.com/emrzvv/lb-research/internal/config"
-	"github.com/emrzvv/lb-research/internal/metric"
 	"github.com/emrzvv/lb-research/internal/model"
 	"github.com/emrzvv/lb-research/internal/stats"
 	"github.com/fschuetz04/simgo"
@@ -50,13 +47,17 @@ func generateSessions(
 			fragments := model.RandomFragments(rng)
 
 			switches := 0
+			penalty := 0.0
 
 			for n := 0; n < fragments; n++ {
 				retries := 0
 
 				for {
 					start := session.Now()
-					ok := handleRequest(pickedServer, session, start, sessionID, cfg, st, rng)
+					ok := pickedServer.HandleRequest(session, start, penalty, sessionID, cfg, st, rng)
+					if penalty > 0 {
+						penalty = 0.0
+					}
 					if ok {
 						break
 					}
@@ -89,6 +90,7 @@ func generateSessions(
 					})
 					pickedServer = newPickedServer
 					switches++
+					penalty += 100 // TODO: distribution
 					retries = 0
 				}
 
@@ -96,62 +98,4 @@ func generateSessions(
 			}
 		})
 	}
-}
-
-func handleRequest(
-	s *model.Server,
-	session simgo.Process,
-	start float64,
-	sessionID int64,
-	cfg *config.Config,
-	st *stats.Statistics,
-	rng *common.RNG) bool {
-
-	s.Lock()
-	if s.CurrentConnections >= s.Parameters.MaxConnections {
-		s.Unlock()
-		st.AddDrop(&stats.DropEvent{
-			ServerID:  s.ID,
-			SessionID: sessionID,
-			T:         start,
-			Reason:    "max_conn",
-		})
-		return false
-	}
-
-	s.CurrentConnections++
-	s.Unlock()
-
-	duration := getDuration(s, cfg, rng)
-	session.Wait(session.Timeout(duration))
-	s.Lock()
-	s.CurrentConnections--
-	s.Unlock()
-
-	st.AddRequest(&stats.RequestEvent{
-		ServerID:   s.ID,
-		SessiontID: sessionID,
-		T1:         start,
-		T2:         start + duration,
-		Duration:   duration,
-	})
-	if ch := metric.RTTChan; ch != nil {
-		select {
-		case ch <- metric.RequestRTT{
-			ServerID: s.ID,
-			RTT:      duration,
-			When:     start,
-		}:
-		default:
-		}
-	}
-
-	return true
-}
-
-func getDuration(s *model.Server, cfg *config.Config, rng *common.RNG) float64 {
-	txMean := cfg.Cluster.SegmentSizeBytes * 8 / (s.Parameters.Mbps * 1_000_000)
-	lnDist := model.RandLogNormal(math.Log(txMean), cfg.Cluster.SigmaServer, rng)
-	rtt := lnDist + 2*s.CurrentOWD/1000.0 // to seconds
-	return rtt
 }

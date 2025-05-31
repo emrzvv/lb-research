@@ -167,12 +167,25 @@ if redirects_dict:
 
 # ──────────────────────── 5. Распределение RTT per strategy ───────────────
 plt.figure(figsize=(12, 6))
-for lbl, arr in rtt_dict.items():
-    sns.histplot(arr, bins=int(BIN), stat="density",
-                 kde=True, element="step", fill=False, label=lbl)
-plt.xlabel("RTT (duration), s"); plt.ylabel("density")
-plt.title("Распределение RTT по стратегиям")
-plt.legend(title="run"); plt.tight_layout()
-plt.savefig(os.path.join(OUT, "rtt_distribution_compare.png")); plt.close()
 
+# cглаживаем kernel density, без гистограмм
+for lbl, arr in rtt_dict.items():
+    # bw_adjust можно варьировать (0.3‒1.0) – чем меньше, тем «острее» кривая
+    sns.kdeplot(
+        arr,
+        bw_adjust=0.6,        # ширина ядра; подберите под свои данные
+        label=lbl,
+        clip=(0, None),       # обрезаем отрицательные значения
+        common_norm=False,    # плотность по каждому набору отдельно
+        fill=False,           # только линии, без заливки — никаких прямоугольников
+        linewidth=1.6
+    )
+
+plt.xlabel("RTT (duration), s")
+plt.ylabel("density")
+plt.title("Распределение RTT по стратегиям")
+plt.legend(title="run")
+plt.tight_layout()
+plt.savefig(os.path.join(OUT, "rtt_distribution_compare.png"))
+plt.close()
 print(f"PNG-файлы сохранены в {OUT}")
