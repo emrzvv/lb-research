@@ -6,6 +6,9 @@ import (
 
 	"github.com/emrzvv/lb-research/internal/common"
 	"github.com/emrzvv/lb-research/internal/config"
+	"github.com/emrzvv/lb-research/internal/metric"
+	"github.com/emrzvv/lb-research/internal/stats"
+	"github.com/fschuetz04/simgo"
 )
 
 type ServerParameters struct {
@@ -58,6 +61,64 @@ func (s *Server) IsOverLoaded() bool {
 	result := s.CurrentConnections >= s.Parameters.MaxConnections
 	s.mu.Unlock()
 	return result
+}
+
+func (s *Server) HandleRequest(
+	session simgo.Process,
+	start float64,
+	penalty float64,
+	sessionID int64,
+	cfg *config.Config,
+	st *stats.Statistics,
+	rng *common.RNG) bool {
+
+	s.Lock()
+	if s.CurrentConnections >= s.Parameters.MaxConnections {
+		s.Unlock()
+		st.AddDrop(&stats.DropEvent{
+			ServerID:  s.ID,
+			SessionID: sessionID,
+			T:         start,
+			Reason:    "max_conn",
+		})
+		return false
+	}
+
+	s.CurrentConnections++
+	s.Unlock()
+
+	duration := s.getDuration(cfg, rng) + penalty
+	session.Wait(session.Timeout(duration))
+	s.Lock()
+	s.CurrentConnections--
+	s.Unlock()
+
+	st.AddRequest(&stats.RequestEvent{
+		ServerID:   s.ID,
+		SessiontID: sessionID,
+		T1:         start,
+		T2:         start + duration,
+		Duration:   duration,
+	})
+	if ch := metric.RTTChan; ch != nil {
+		select {
+		case ch <- metric.RequestRTT{
+			ServerID: s.ID,
+			RTT:      duration,
+			When:     start,
+		}:
+		default:
+		}
+	}
+
+	return true
+}
+
+func (s *Server) getDuration(cfg *config.Config, rng *common.RNG) float64 {
+	txMean := cfg.Cluster.SegmentSizeBytes * 8 / (s.Parameters.Mbps * 1_000_000)
+	lnDist := RandLogNormal(math.Log(txMean), cfg.Cluster.SigmaServer, rng)
+	rtt := lnDist + 2*s.CurrentOWD/1000.0 // to seconds
+	return rtt
 }
 
 type Spike struct {
