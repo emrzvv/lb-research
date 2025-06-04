@@ -168,22 +168,22 @@ if redirects_dict:
 # ──────────────────────── 5. Распределение RTT per strategy ───────────────
 plt.figure(figsize=(12, 6))
 
-# cглаживаем kernel density, без гистограмм
 for lbl, arr in rtt_dict.items():
-    # bw_adjust можно варьировать (0.3‒1.0) – чем меньше, тем «острее» кривая
-    sns.kdeplot(
-        arr,
-        bw_adjust=0.6,        # ширина ядра; подберите под свои данные
-        label=lbl,
-        clip=(0, None),       # обрезаем отрицательные значения
-        common_norm=False,    # плотность по каждому набору отдельно
-        fill=False,           # только линии, без заливки — никаких прямоугольников
-        linewidth=1.6
+    arr_ms = np.asarray(arr) * 1000          # ➊ секунды → миллисекунды
+    sns.histplot(
+        arr_ms,
+        bins=80,                             # подберите шаг при желании
+        stat='count',                        # ➋ считаем частоты, не плотность
+        element='step',                      # только контуры, без заливки
+        fill=False,
+        linewidth=1.4,
+        label=lbl
     )
 
-plt.xlabel("RTT (duration), s")
-plt.ylabel("density")
+plt.xlabel("RTT, мс")
+plt.ylabel("кол-во запросов")
 plt.title("Распределение RTT по стратегиям")
+plt.xlim(left=0)                             # отрицательных значений быть не может
 plt.legend(title="run")
 plt.tight_layout()
 plt.savefig(os.path.join(OUT, "rtt_distribution_compare.png"))

@@ -38,11 +38,10 @@ BASE_CFG="./config/default.yaml"
 OUT_ROOT="./csv";   mkdir -p "$OUT_ROOT"
 mkdir -p "$PLOT_DIR"
 
-# ────────────────── сборка бинаря (один раз) ──────────────────────────────
-if [[ ! -x "$BIN" ]]; then
-  echo "- building simulator -> $BIN"
-  go build -o "$BIN" ./cmd/sim
-fi
+# ────────────────── сборка бинаря ──────────────────────────────
+
+echo "- building simulator -> $BIN"
+go build -o "$BIN" ./cmd/sim
 
 [[ -f "$BASE_CFG" ]] || { echo "!! $BASE_CFG not found"; exit 1; }
 

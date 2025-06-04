@@ -38,7 +38,7 @@ func (b *P2CBalancer) PickServer(_ int64) *model.Server {
 	b.mu.RUnlock()
 	s1.Lock()
 	s2.Lock()
-	if s1.CurrentConnections <= s2.CurrentConnections {
+	if s1.CurrentConnections/s1.Parameters.MaxConnections <= s2.CurrentConnections/s2.Parameters.MaxConnections {
 		s1.Unlock()
 		s2.Unlock()
 		return s1

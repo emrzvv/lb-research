@@ -42,6 +42,9 @@ type Config struct {
 
 		MaxRetriesPerSegment  int `yaml:"max_retries"`  // количество попыток запросить один и тот же .ts без смены сервера
 		MaxSwitchesPerSession int `yaml:"max_switches"` // сколько раз можем менять сервер во время получения одного видео
+
+		FirstPickRetries int     `yaml:"first_pick_retries"` // количество попыток начать сессию
+		FirstPickBackoff float64 `yaml:"first_pick_backoff"` // интервал для следующего запроса на начало сессии
 	} `yaml:"cluster"`
 
 	Jitter struct {
@@ -147,6 +150,5 @@ func fillDefaults(c *Config) {
 }
 
 func validate(cfg *Config) error {
-	// TODO: validate
 	return nil
 }

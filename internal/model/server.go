@@ -75,19 +75,13 @@ func (s *Server) HandleRequest(
 	s.Lock()
 	if s.CurrentConnections >= s.Parameters.MaxConnections {
 		s.Unlock()
-		st.AddDrop(&stats.DropEvent{
-			ServerID:  s.ID,
-			SessionID: sessionID,
-			T:         start,
-			Reason:    "max_conn",
-		})
 		return false
 	}
 
 	s.CurrentConnections++
 	s.Unlock()
 
-	duration := s.getDuration(cfg, rng) + penalty
+	duration := s.getDuration(cfg, rng) + penalty/1000.0
 	session.Wait(session.Timeout(duration))
 	s.Lock()
 	s.CurrentConnections--
@@ -130,7 +124,9 @@ type Spike struct {
 func InitServers(cfg *config.Config, rng *common.RNG) []*Server {
 	var servers []*Server
 	for i := range cfg.Cluster.Servers {
-		mbps := RandNormal(cfg.Cluster.CapMean, cfg.Cluster.CapCV, rng)
+		// mbps := RandNormal(cfg.Cluster.CapMean, cfg.Cluster.CapCV, rng)
+		sigmaLn := math.Sqrt(math.Log(1 + cfg.Cluster.CapCV*cfg.Cluster.CapCV))
+		mbps := RandLogNormal(math.Log(cfg.Cluster.CapMean)-0.5*sigmaLn*sigmaLn, cfg.Cluster.CapCV, rng)
 		owd := RandGamma(cfg.Cluster.OWDMean, cfg.Cluster.OWDCV, rng)
 
 		p := &ServerParameters{

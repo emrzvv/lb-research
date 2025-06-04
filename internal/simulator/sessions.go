@@ -13,6 +13,20 @@ func chooseSession(cfg *config.Config, rng *common.RNG) int64 {
 	return rng.Int63n(cfg.Traffic.UsersAmount) + 1
 }
 
+func tryPickServer(session simgo.Process,
+	balancer balancer.Balancer,
+	sessionID int64,
+	cfg *config.Config) (*model.Server, bool) {
+	pickedServer := balancer.PickServer(sessionID)
+	tries := 0
+	for pickedServer == nil && tries < cfg.Cluster.FirstPickRetries {
+		tries++
+		session.Wait(session.Timeout(cfg.Cluster.FirstPickBackoff))
+		pickedServer = balancer.PickServer(sessionID)
+	}
+	return pickedServer, pickedServer != nil
+}
+
 func generateSessions(
 	proc simgo.Process,
 	sim *simgo.Simulation,
@@ -35,15 +49,15 @@ func generateSessions(
 		sessionID := chooseSession(cfg, rng)
 		st.AddArrival(&stats.ArrivalEvent{T: now, SessionID: sessionID})
 
-		pickedServer := balancer.PickServer(sessionID)
-		if pickedServer == nil {
-			st.AddDrop(&stats.DropEvent{
-				ServerID: 0, SessionID: sessionID, T: now, Reason: "no_server"})
-			continue
-		}
-		st.AddPick(pickedServer.ID - 1)
-
 		sim.Process(func(session simgo.Process) {
+			pickedServer, ok := tryPickServer(session, balancer, sessionID, cfg)
+			if !ok {
+				st.AddDrop(&stats.DropEvent{
+					ServerID: 0, SessionID: sessionID, T: now, Reason: "no_server"})
+				return
+			}
+			st.AddPick(pickedServer.ID - 1)
+
 			fragments := model.RandomFragments(rng)
 
 			switches := 0
@@ -76,10 +90,10 @@ func generateSessions(
 						return
 					}
 
-					newPickedServer := balancer.PickServer(sessionID)
-					if newPickedServer == nil {
+					newPickedServer, ok := tryPickServer(session, balancer, sessionID, cfg)
+					if !ok {
 						st.AddDrop(&stats.DropEvent{
-							ServerID: 0, SessionID: sessionID, T: now, Reason: "no_server"})
+							ServerID: 0, SessionID: sessionID, T: now, Reason: "no_new_server"})
 						return
 					}
 					st.AddRedirect(&stats.RedirectEvent{
@@ -90,7 +104,7 @@ func generateSessions(
 					})
 					pickedServer = newPickedServer
 					switches++
-					penalty += 100 // TODO: distribution
+					penalty += 200
 					retries = 0
 				}
 
