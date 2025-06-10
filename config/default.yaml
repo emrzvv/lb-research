@@ -5,13 +5,13 @@ simulation:
 
 traffic:
   base_rps: 300         # средняя интенсивность поступления сессий (λ)
-  users_amount: 50000   # размер пула уникальных пользователей (sessionID)
+  users_amount: 125000   # размер пула уникальных пользователей (sessionID)
 
-# сценарий всплесков нагрузки («бурстов»)
+# сценарий всплесков нагрузки
 spikes:
   - at: 120             # t = 120 с
     duration: 30        # 30 с
-    factor: 3           # *5 от base_rps
+    factor: 3           # *3 от base_rps
   - at: 300
     duration: 60
     factor: 8
@@ -20,7 +20,7 @@ spikes:
     factor: 5
 
 cluster:
-  servers: 30           # число серверов в кластере
+  servers: 35           # число серверов в кластере
   bitrate: 4            # Mbps: битрейт одного Full-HD потока
   cap_mean_mbps: 500    # средняя пропускная способность сервера
   cap_cv: 0.3           # CV (σ/μ) пропускной способности
@@ -29,13 +29,15 @@ cluster:
   sigma_server: 0.25    # CV лог-нормального шума
   max_retries: 2        # макс кол-во запросов одного и того же .ts-сегмента
   max_switches: 4        # макс кол-во перебросов с "домашнего" сервера
+  first_pick_retries: 1 # макс кол-во попыток выбрать сервер
+  first_pick_backoff: 100 # задержка между выборами сервера
 
 jitter:
   tick_s: 1             # период обновления OWD, сек
   spike_prob: 0.005     # вероятность «лаг-спайка» на каждом тике
-  spike_extra: 400      # +мс к OWD при спайке
+  spike_extra: 600      # +мс к OWD при спайке
   spike_duration_s: 5   # длительность сетевого спайка, сек
 
 balancer:
   strategy: "ch"        # базовый алгоритм (например: rr, random, ch, ch+wlc …)
-  ch_replicas: 100
+  ch_replicas: 200

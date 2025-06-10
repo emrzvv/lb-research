@@ -127,6 +127,12 @@ func fillDefaults(c *Config) {
 	if c.Cluster.MaxSwitchesPerSession == 0 {
 		c.Cluster.MaxSwitchesPerSession = 4
 	}
+	if c.Cluster.FirstPickRetries == 0 {
+		c.Cluster.FirstPickRetries = 3
+	}
+	if c.Cluster.FirstPickBackoff == 0 {
+		c.Cluster.FirstPickBackoff = 100
+	}
 	if c.Jitter.Tick == 0 {
 		c.Jitter.Tick = 1
 	}

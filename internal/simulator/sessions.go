@@ -93,7 +93,7 @@ func generateSessions(
 					newPickedServer, ok := tryPickServer(session, balancer, sessionID, cfg)
 					if !ok {
 						st.AddDrop(&stats.DropEvent{
-							ServerID: 0, SessionID: sessionID, T: now, Reason: "no_new_server"})
+							ServerID: pickedServer.ID, SessionID: sessionID, T: now, Reason: "no_new_server"})
 						return
 					}
 					st.AddRedirect(&stats.RedirectEvent{
