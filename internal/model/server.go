@@ -23,14 +23,6 @@ type ServerSnapshot struct {
 	OWD         float64
 }
 
-func NewSnapshot(t float64, connections int, owd float64) *stats.SnapshotEvent {
-	return &ServerSnapshot{
-		T:           t,
-		Connections: connections,
-		OWD:         owd,
-	}
-}
-
 type Server struct {
 	ID                 int
 	CurrentConnections int
@@ -42,7 +34,12 @@ type Server struct {
 
 func (s *Server) MakeSnapshot(t float64) *stats.SnapshotEvent {
 	s.mu.Lock()
-	ss := NewSnapshot(t, s.CurrentConnections, s.CurrentOWD)
+	ss := &stats.SnapshotEvent{
+		T:           t,
+		ServerID:    s.ID,
+		Connections: s.CurrentConnections,
+		OWD:         s.CurrentOWD,
+	}
 	s.mu.Unlock()
 	return ss
 }

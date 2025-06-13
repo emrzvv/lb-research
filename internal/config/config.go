@@ -40,8 +40,11 @@ type Config struct {
 
 		SigmaServer float64 `yaml:"sigma_server"` // CV лог-нормального шума
 
-		MaxRetriesPerSegment  int `yaml:"max_retries"`  // количество попыток запросить один и тот же .ts без смены сервера
-		MaxSwitchesPerSession int `yaml:"max_switches"` // сколько раз можем менять сервер во время получения одного видео
+		MaxRetriesPerSegment     int     `yaml:"max_retries"`     // количество попыток запросить один и тот же .ts без смены сервера
+		RetriesPerSegmentBackoff float64 `yaml:"retries_backoff"` // интервал для следующей попытки запросить .ts сегмент
+		MaxSwitchesPerSession    int     `yaml:"max_switches"`    // сколько раз можем менять сервер во время получения одного видео
+
+		SwitchPenalty float64 `yaml:"switch_penalty"` // штраф за смену сервера мс
 
 		FirstPickRetries int     `yaml:"first_pick_retries"` // количество попыток начать сессию
 		FirstPickBackoff float64 `yaml:"first_pick_backoff"` // интервал для следующего запроса на начало сессии

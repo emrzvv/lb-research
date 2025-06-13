@@ -10,7 +10,7 @@ import (
 	"github.com/emrzvv/lb-research/internal/stats"
 )
 
-func writeServersCfgToCSV(servers []*model.Server, path string) error {
+func WriteServersCfgToCSV(servers []*model.Server, path string) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -77,30 +77,6 @@ func writeSummaryToCSV(stats *stats.StatisticsNaive, servers []*model.Server, pa
 	wd.Write([]string{fmt.Sprintf("%d", droppedNoServer)})
 	wd.Flush()
 	return wd.Error()
-}
-
-func writeSnapshotsToCSV(servers []*model.Server, path string) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	wr := csv.NewWriter(f)
-	_ = wr.Write([]string{"time_s", "server_id", "connections", "owd_ms"})
-
-	for _, s := range servers {
-		for _, snap := range s.Snapshots {
-			wr.Write([]string{
-				fmt.Sprintf("%.5f", snap.T),
-				fmt.Sprintf("%d", s.ID),
-				fmt.Sprintf("%d", snap.Connections),
-				fmt.Sprintf("%.5f", snap.OWD),
-			})
-		}
-	}
-	wr.Flush()
-	return wr.Error()
 }
 
 func writeStatisticsToCSV(stats *stats.StatisticsNaive,
@@ -197,7 +173,7 @@ func ToCSV(dir string, statistics *stats.StatisticsNaive, servers []*model.Serve
 	if strings.HasSuffix(dir, "/") {
 		dir = dir[:len(dir)-1]
 	}
-	err = writeServersCfgToCSV(servers, fmt.Sprintf("%s/servers.csv", dir))
+	// err = writeServersCfgToCSV(servers, fmt.Sprintf("%s/servers.csv", dir))
 	if err != nil {
 		return err
 	}
@@ -208,10 +184,10 @@ func ToCSV(dir string, statistics *stats.StatisticsNaive, servers []*model.Serve
 	if err != nil {
 		return err
 	}
-	err = writeSnapshotsToCSV(servers, fmt.Sprintf("%s/snapshots.csv", dir))
-	if err != nil {
-		return err
-	}
+	// err = writeSnapshotsToCSV(servers, fmt.Sprintf("%s/snapshots.csv", dir))
+	// if err != nil {
+	// 	return err
+	// }
 	err = writeStatisticsToCSV(statistics,
 		fmt.Sprintf("%s/arrivals.csv", dir),
 		fmt.Sprintf("%s/requests.csv", dir),

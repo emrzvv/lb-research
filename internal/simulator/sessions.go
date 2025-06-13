@@ -77,6 +77,7 @@ func generateSessions(
 					}
 					retries++
 					if retries <= cfg.Cluster.MaxRetriesPerSegment {
+						session.Wait(session.Timeout(cfg.Cluster.RetriesPerSegmentBackoff))
 						continue
 					}
 
@@ -104,11 +105,11 @@ func generateSessions(
 					})
 					pickedServer = newPickedServer
 					switches++
-					penalty += 200
+					penalty += cfg.Cluster.SwitchPenalty
 					retries = 0
 				}
 
-				session.Wait(session.Timeout(float64(cfg.Cluster.SegmentDuration)))
+				session.Wait(session.Timeout(float64(cfg.Cluster.SegmentDuration) / 2.0))
 			}
 		})
 	}

@@ -7,7 +7,6 @@ import (
 	"github.com/emrzvv/lb-research/internal/balancer"
 	"github.com/emrzvv/lb-research/internal/common"
 	"github.com/emrzvv/lb-research/internal/config"
-	"github.com/emrzvv/lb-research/internal/export"
 	"github.com/emrzvv/lb-research/internal/model"
 	"github.com/emrzvv/lb-research/internal/simulator"
 )
@@ -30,7 +29,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	st := simulator.Run(cfg, servers, b, rng, *outDir)
+	_ = simulator.Run(cfg, servers, b, rng, *outDir)
 
-	export.ToCSV(*outDir, st, servers)
 }
