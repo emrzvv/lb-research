@@ -161,12 +161,13 @@ func (st *StatisticsConcurrent) AddPick(id int) {
 }
 
 func (st *StatisticsConcurrent) Close() {
+	st.cancel()
+	st.Wg.Wait()
 	close(st.Arrivals)
 	close(st.ServerRequests)
 	close(st.Drops)
 	close(st.Redirects)
-	st.cancel()
-	st.Wg.Wait()
+	close(st.Snapshots)
 }
 
 func writeSummary(served, dropped []uint64,
