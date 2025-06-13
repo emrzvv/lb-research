@@ -237,16 +237,53 @@ if redirects_dict:
 plt.figure(figsize=(12, 6))
 
 for lbl, arr in rtt_dict.items():
-    arr_ms = np.asarray(arr) * 1000          # ➊ секунды → миллисекунды
+    arr_ms = np.asarray(arr) * 1000          # 1 секунды → миллисекунды
     sns.histplot(
         arr_ms,
         bins=80,                             # подберите шаг при желании
-        stat='count',                        # ➋ считаем частоты, не плотность
+        stat='count',                        # 2 считаем частоты, не плотность
         element='step',                      # только контуры, без заливки
         fill=False,
         linewidth=1.4,
         label=lbl
     )
+
+plt.xlabel("RTT, мс")
+plt.ylabel("Кол-во запросов")
+# plt.title("Распределение RTT по стратегиям")
+plt.xlim(left=0)                             # отрицательных значений быть не может
+plt.legend(title="run")
+plt.tight_layout()
+plt.savefig(os.path.join(OUT, "rtt_distribution_compare.png"))
+plt.close()
+
+# --- TEMP
+plt.figure(figsize=(12, 6))
+
+for lbl, arr in rtt_dict.items():
+    rtt_ms = np.asarray(arr) * 1000
+
+    # строим эмпирическую CDF
+    x = np.sort(rtt_ms)
+    y = np.linspace(0, 1, len(x), endpoint=False)  # F(x) = P(RTT ≤ x)
+
+    # линия «лестницей» — чтобы ECDF была аккуратная
+    plt.step(x, y, where="post", label=lbl)
+
+# горизонтальные подсказки: медиана (0.5) и p95 (0.95)
+for q, ls in zip([0.5, 0.95], [":", "--"]):
+    plt.axhline(q, color="grey", linestyle=ls, linewidth=0.8)
+    plt.text(plt.xlim()[1]*0.98, q+0.01, f"{int(q*100)}-й перц.", 
+             ha="right", va="bottom", color="grey", fontsize=8)
+
+plt.xlabel("RTT, мс")
+plt.ylabel("Доля обслуженных запросов  ≤  RTT")
+plt.xlim(left=0)
+plt.ylim(0, 1)
+plt.legend(title="run", loc="lower right")
+plt.tight_layout()
+plt.savefig(os.path.join(OUT, "rtt_ecdf_compare.png"))
+plt.close()
 
 # ──────────────────────── 6. Stickiness(t) ────────────────────────────────
 if stickiness_dict:
@@ -275,12 +312,5 @@ if requests_dict:
     plt.savefig(os.path.join(OUT, "requests_count_compare.png"))
     plt.close()
 
-plt.xlabel("RTT, мс")
-plt.ylabel("Кол-во запросов")
-# plt.title("Распределение RTT по стратегиям")
-plt.xlim(left=0)                             # отрицательных значений быть не может
-plt.legend(title="run")
-plt.tight_layout()
-plt.savefig(os.path.join(OUT, "rtt_distribution_compare.png"))
-plt.close()
+
 print(f"PNG-файлы сохранены в {OUT}")

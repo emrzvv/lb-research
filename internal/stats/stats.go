@@ -162,12 +162,12 @@ func (st *StatisticsConcurrent) AddPick(id int) {
 
 func (st *StatisticsConcurrent) Close() {
 	st.cancel()
-	st.Wg.Wait()
 	close(st.Arrivals)
 	close(st.ServerRequests)
 	close(st.Drops)
 	close(st.Redirects)
 	close(st.Snapshots)
+	st.Wg.Wait()
 }
 
 func writeSummary(served, dropped []uint64,
@@ -247,73 +247,8 @@ func CsvWriter(st *StatisticsConcurrent, ctx context.Context, serversAmount int,
 
 	for {
 		select {
-		// arrivals
-		case ev, ok := <-st.Arrivals:
-			if !ok {
-				st.Arrivals = nil
-				continue
-			}
-			_ = arrW.w.Write([]string{
-				fmt.Sprintf("%.5f", ev.T),
-				fmt.Sprintf("%d", ev.SessionID),
-			})
-		// requests
-		case ev, ok := <-st.ServerRequests:
-			if !ok {
-				st.ServerRequests = nil
-				continue
-			}
-			_ = reqW.w.Write([]string{
-				fmt.Sprintf("%d", ev.ServerID),
-				fmt.Sprintf("%d", ev.SessiontID),
-				fmt.Sprintf("%.5f", ev.T1),
-				fmt.Sprintf("%.5f", ev.T2),
-				fmt.Sprintf("%.5f", ev.Duration),
-			})
-			served[ev.ServerID-1]++
-		// drops
-		case ev, ok := <-st.Drops:
-			if !ok {
-				st.Drops = nil
-				continue
-			}
-			if ev.ServerID == 0 {
-				droppedNoServer++
-			} else {
-				dropped[ev.ServerID-1]++
-			}
-			_ = dropW.w.Write([]string{
-				fmt.Sprintf("%d", ev.ServerID),
-				fmt.Sprintf("%d", ev.SessionID),
-				fmt.Sprintf("%.5f", ev.T),
-				fmt.Sprintf("%s", ev.Reason),
-			})
-		// redirects
-		case ev, ok := <-st.Redirects:
-			if !ok {
-				st.Redirects = nil
-				continue
-			}
-			_ = redW.w.Write([]string{
-				fmt.Sprintf("%d", ev.SessionID),
-				fmt.Sprintf("%d", ev.FromID),
-				fmt.Sprintf("%d", ev.ToID),
-				fmt.Sprintf("%.5f", ev.T),
-			})
-		case ev, ok := <-st.Snapshots:
-			if !ok {
-				st.Snapshots = nil
-				continue
-			}
-			_ = snapW.w.Write([]string{
-				fmt.Sprintf("%.5f", ev.T),
-				fmt.Sprintf("%d", ev.ServerID),
-				fmt.Sprintf("%d", ev.Connections),
-				fmt.Sprintf("%.5f", ev.OWD),
-			})
-		case <-flushTicker.C:
-			flushAll()
 		case <-ctx.Done():
+			// fmt.Println("closing statistics!")
 			for ev := range st.Arrivals {
 				_ = arrW.w.Write([]string{fmt.Sprintf("%.5f", ev.T), fmt.Sprintf("%d", ev.SessionID)})
 			}
@@ -335,6 +270,77 @@ func CsvWriter(st *StatisticsConcurrent, ctx context.Context, serversAmount int,
 			_ = redW.f.Close()
 			_ = snapW.f.Close()
 			return
+		// arrivals
+		case ev, ok := <-st.Arrivals:
+			// fmt.Println("event on arrivals!")
+			if !ok {
+				st.Arrivals = nil
+				continue
+			}
+			_ = arrW.w.Write([]string{
+				fmt.Sprintf("%.5f", ev.T),
+				fmt.Sprintf("%d", ev.SessionID),
+			})
+		// requests
+		case ev, ok := <-st.ServerRequests:
+			// fmt.Println("event on server requests!")
+			if !ok {
+				st.ServerRequests = nil
+				continue
+			}
+			_ = reqW.w.Write([]string{
+				fmt.Sprintf("%d", ev.ServerID),
+				fmt.Sprintf("%d", ev.SessiontID),
+				fmt.Sprintf("%.5f", ev.T1),
+				fmt.Sprintf("%.5f", ev.T2),
+				fmt.Sprintf("%.5f", ev.Duration),
+			})
+			served[ev.ServerID-1]++
+		// drops
+		case ev, ok := <-st.Drops:
+			// fmt.Println("event on server drops!")
+			if !ok {
+				st.Drops = nil
+				continue
+			}
+			if ev.ServerID == 0 {
+				droppedNoServer++
+			} else {
+				dropped[ev.ServerID-1]++
+			}
+			_ = dropW.w.Write([]string{
+				fmt.Sprintf("%d", ev.ServerID),
+				fmt.Sprintf("%d", ev.SessionID),
+				fmt.Sprintf("%.5f", ev.T),
+				fmt.Sprintf("%s", ev.Reason),
+			})
+		// redirects
+		case ev, ok := <-st.Redirects:
+			// fmt.Println("event on redirects!")
+			if !ok {
+				st.Redirects = nil
+				continue
+			}
+			_ = redW.w.Write([]string{
+				fmt.Sprintf("%d", ev.SessionID),
+				fmt.Sprintf("%d", ev.FromID),
+				fmt.Sprintf("%d", ev.ToID),
+				fmt.Sprintf("%.5f", ev.T),
+			})
+		case ev, ok := <-st.Snapshots:
+			// fmt.Println("event on server snapshots!")
+			if !ok {
+				st.Snapshots = nil
+				continue
+			}
+			_ = snapW.w.Write([]string{
+				fmt.Sprintf("%.5f", ev.T),
+				fmt.Sprintf("%d", ev.ServerID),
+				fmt.Sprintf("%d", ev.Connections),
+				fmt.Sprintf("%.5f", ev.OWD),
+			})
+		case <-flushTicker.C:
+			flushAll()
 		}
 	}
 }

@@ -58,8 +58,9 @@ type Config struct {
 	} `yaml:"jitter"`
 
 	Balancer struct {
-		Strategy   string `yaml:"strategy"`
-		CHReplicas int    `yaml:"ch_replicas"`
+		Strategy   string  `yaml:"strategy"`
+		CHReplicas int     `yaml:"ch_replicas"`
+		EWMAAlpha  float64 `yaml:"ewma_alpha"`
 	} `yaml:"balancer"`
 }
 

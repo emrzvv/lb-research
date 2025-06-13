@@ -54,8 +54,7 @@ func Run(cfg *config.Config, servers []*model.Server, balancer balancer.Balancer
 	}
 
 	simulation.RunUntil(cfg.Simulation.TimeSeconds)
-
-	statistics.Close()
 	simulation.Shutdown()
+	statistics.Close()
 	return statistics
 }
