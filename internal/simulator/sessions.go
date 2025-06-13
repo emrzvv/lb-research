@@ -97,6 +97,11 @@ func generateSessions(
 							ServerID: pickedServer.ID, SessionID: sessionID, T: now, Reason: "no_new_server"})
 						return
 					}
+					if pickedServer.ID == newPickedServer.ID {
+						penalty += cfg.Cluster.SwitchPenalty
+						retries = 0
+						continue
+					}
 					st.AddRedirect(&stats.RedirectEvent{
 						SessionID: sessionID,
 						FromID:    pickedServer.ID,
