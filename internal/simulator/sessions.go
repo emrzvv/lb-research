@@ -34,7 +34,7 @@ func generateSessions(
 	rc *rateCtrl,
 	balancer balancer.Balancer,
 	servers []*model.Server,
-	st *stats.Statistics,
+	st stats.Statistics,
 	rng *common.RNG) {
 
 	for {

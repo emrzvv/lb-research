@@ -30,7 +30,7 @@ func writeServersCfgToCSV(servers []*model.Server, path string) error {
 	return w.Error()
 }
 
-func writeSummaryToCSV(stats *stats.Statistics, servers []*model.Server, path, pathDropsNoServer string) error {
+func writeSummaryToCSV(stats *stats.StatisticsNaive, servers []*model.Server, path, pathDropsNoServer string) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -103,7 +103,7 @@ func writeSnapshotsToCSV(servers []*model.Server, path string) error {
 	return wr.Error()
 }
 
-func writeStatisticsToCSV(stats *stats.Statistics,
+func writeStatisticsToCSV(stats *stats.StatisticsNaive,
 	arrivalsPath,
 	requestsPath,
 	dropsPath,
@@ -189,7 +189,7 @@ func writeStatisticsToCSV(stats *stats.Statistics,
 	return rwred.Error()
 }
 
-func ToCSV(dir string, statistics *stats.Statistics, servers []*model.Server) error {
+func ToCSV(dir string, statistics *stats.StatisticsNaive, servers []*model.Server) error {
 	err := os.MkdirAll(dir, 0o755)
 	if err != nil {
 		return err

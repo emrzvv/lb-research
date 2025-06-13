@@ -30,9 +30,10 @@ func (r *rateCtrl) Set(v float64) {
 	r.mu.Unlock()
 }
 
-func Run(cfg *config.Config, servers []*model.Server, balancer balancer.Balancer, rng *common.RNG) *stats.Statistics {
+func Run(cfg *config.Config, servers []*model.Server, balancer balancer.Balancer, rng *common.RNG, outDir string) stats.Statistics {
 	simulation := simgo.NewSimulation()
-	statistics := stats.NewStatistics(cfg)
+	// statistics := stats.NewStatistics(cfg)
+	statistics := stats.NewStatisticsConcurrent(cfg, outDir)
 
 	rc := &rateCtrl{base: cfg.Traffic.BaseRPS, current: cfg.Traffic.BaseRPS}
 

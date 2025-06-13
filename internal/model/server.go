@@ -23,7 +23,7 @@ type ServerSnapshot struct {
 	OWD         float64
 }
 
-func NewSnapshot(t float64, connections int, owd float64) *ServerSnapshot {
+func NewSnapshot(t float64, connections int, owd float64) *stats.SnapshotEvent {
 	return &ServerSnapshot{
 		T:           t,
 		Connections: connections,
@@ -37,15 +37,14 @@ type Server struct {
 	CurrentOWD         float64
 	SpikeUntil         float64
 	Parameters         *ServerParameters
-	Snapshots          []*ServerSnapshot
 	mu                 sync.Mutex
 }
 
-func (s *Server) AddSnapshot(t float64) {
+func (s *Server) MakeSnapshot(t float64) *stats.SnapshotEvent {
 	s.mu.Lock()
 	ss := NewSnapshot(t, s.CurrentConnections, s.CurrentOWD)
-	s.Snapshots = append(s.Snapshots, ss)
 	s.mu.Unlock()
+	return ss
 }
 
 func (s *Server) Lock() {
@@ -69,7 +68,7 @@ func (s *Server) HandleRequest(
 	penalty float64,
 	sessionID int64,
 	cfg *config.Config,
-	st *stats.Statistics,
+	st stats.Statistics,
 	rng *common.RNG) bool {
 
 	s.Lock()
@@ -140,7 +139,6 @@ func InitServers(cfg *config.Config, rng *common.RNG) []*Server {
 			CurrentConnections: 0,
 			CurrentOWD:         p.OWD,
 			Parameters:         p,
-			Snapshots:          make([]*ServerSnapshot, 0),
 			mu:                 sync.Mutex{},
 		}
 

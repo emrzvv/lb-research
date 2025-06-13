@@ -30,7 +30,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	st := simulator.Run(cfg, servers, b, rng)
+	st := simulator.Run(cfg, servers, b, rng, *outDir)
 
 	export.ToCSV(*outDir, st, servers)
 }
