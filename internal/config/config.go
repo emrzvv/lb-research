@@ -40,8 +40,14 @@ type Config struct {
 
 		SigmaServer float64 `yaml:"sigma_server"` // CV лог-нормального шума
 
-		MaxRetriesPerSegment  int `yaml:"max_retries"`  // количество попыток запросить один и тот же .ts без смены сервера
-		MaxSwitchesPerSession int `yaml:"max_switches"` // сколько раз можем менять сервер во время получения одного видео
+		MaxRetriesPerSegment     int     `yaml:"max_retries"`     // количество попыток запросить один и тот же .ts без смены сервера
+		RetriesPerSegmentBackoff float64 `yaml:"retries_backoff"` // интервал для следующей попытки запросить .ts сегмент
+		MaxSwitchesPerSession    int     `yaml:"max_switches"`    // сколько раз можем менять сервер во время получения одного видео
+
+		SwitchPenalty float64 `yaml:"switch_penalty"` // штраф за смену сервера мс
+
+		FirstPickRetries int     `yaml:"first_pick_retries"` // количество попыток начать сессию
+		FirstPickBackoff float64 `yaml:"first_pick_backoff"` // интервал для следующего запроса на начало сессии
 	} `yaml:"cluster"`
 
 	Jitter struct {
@@ -52,8 +58,9 @@ type Config struct {
 	} `yaml:"jitter"`
 
 	Balancer struct {
-		Strategy   string `yaml:"strategy"`
-		CHReplicas int    `yaml:"ch_replicas"`
+		Strategy   string  `yaml:"strategy"`
+		CHReplicas int     `yaml:"ch_replicas"`
+		EWMAAlpha  float64 `yaml:"ewma_alpha"`
 	} `yaml:"balancer"`
 }
 
@@ -124,6 +131,12 @@ func fillDefaults(c *Config) {
 	if c.Cluster.MaxSwitchesPerSession == 0 {
 		c.Cluster.MaxSwitchesPerSession = 4
 	}
+	if c.Cluster.FirstPickRetries == 0 {
+		c.Cluster.FirstPickRetries = 3
+	}
+	if c.Cluster.FirstPickBackoff == 0 {
+		c.Cluster.FirstPickBackoff = 100
+	}
 	if c.Jitter.Tick == 0 {
 		c.Jitter.Tick = 1
 	}
@@ -147,6 +160,5 @@ func fillDefaults(c *Config) {
 }
 
 func validate(cfg *Config) error {
-	// TODO: validate
 	return nil
 }

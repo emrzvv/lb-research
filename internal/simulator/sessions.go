@@ -13,6 +13,20 @@ func chooseSession(cfg *config.Config, rng *common.RNG) int64 {
 	return rng.Int63n(cfg.Traffic.UsersAmount) + 1
 }
 
+func tryPickServer(session simgo.Process,
+	balancer balancer.Balancer,
+	sessionID int64,
+	cfg *config.Config) (*model.Server, bool) {
+	pickedServer := balancer.PickServer(sessionID)
+	tries := 0
+	for pickedServer == nil && tries < cfg.Cluster.FirstPickRetries {
+		tries++
+		session.Wait(session.Timeout(cfg.Cluster.FirstPickBackoff / 1000.0))
+		pickedServer = balancer.PickServer(sessionID)
+	}
+	return pickedServer, pickedServer != nil
+}
+
 func generateSessions(
 	proc simgo.Process,
 	sim *simgo.Simulation,
@@ -20,7 +34,7 @@ func generateSessions(
 	rc *rateCtrl,
 	balancer balancer.Balancer,
 	servers []*model.Server,
-	st *stats.Statistics,
+	st stats.Statistics,
 	rng *common.RNG) {
 
 	for {
@@ -35,15 +49,15 @@ func generateSessions(
 		sessionID := chooseSession(cfg, rng)
 		st.AddArrival(&stats.ArrivalEvent{T: now, SessionID: sessionID})
 
-		pickedServer := balancer.PickServer(sessionID)
-		if pickedServer == nil {
-			st.AddDrop(&stats.DropEvent{
-				ServerID: 0, SessionID: sessionID, T: now, Reason: "no_server"})
-			continue
-		}
-		st.AddPick(pickedServer.ID - 1)
-
 		sim.Process(func(session simgo.Process) {
+			pickedServer, ok := tryPickServer(session, balancer, sessionID, cfg)
+			if !ok {
+				st.AddDrop(&stats.DropEvent{
+					ServerID: 0, SessionID: sessionID, T: now, Reason: "no_server"})
+				return
+			}
+			st.AddPick(pickedServer.ID - 1)
+
 			fragments := model.RandomFragments(rng)
 
 			switches := 0
@@ -63,9 +77,9 @@ func generateSessions(
 					}
 					retries++
 					if retries <= cfg.Cluster.MaxRetriesPerSegment {
+						session.Wait(session.Timeout(cfg.Cluster.RetriesPerSegmentBackoff / 1000.0))
 						continue
 					}
-
 					if switches >= cfg.Cluster.MaxSwitchesPerSession {
 						st.AddDrop(&stats.DropEvent{
 							ServerID:  pickedServer.ID,
@@ -79,8 +93,13 @@ func generateSessions(
 					newPickedServer := balancer.PickServer(sessionID)
 					if newPickedServer == nil {
 						st.AddDrop(&stats.DropEvent{
-							ServerID: 0, SessionID: sessionID, T: now, Reason: "no_server"})
+							ServerID: pickedServer.ID, SessionID: sessionID, T: now, Reason: "no_new_server"})
 						return
+					}
+					if pickedServer.ID == newPickedServer.ID {
+						penalty += cfg.Cluster.SwitchPenalty
+						retries = 0
+						continue
 					}
 					st.AddRedirect(&stats.RedirectEvent{
 						SessionID: sessionID,
@@ -90,11 +109,11 @@ func generateSessions(
 					})
 					pickedServer = newPickedServer
 					switches++
-					penalty += 100 // TODO: distribution
+					penalty += cfg.Cluster.SwitchPenalty
 					retries = 0
 				}
 
-				session.Wait(session.Timeout(float64(cfg.Cluster.SegmentDuration)))
+				session.Wait(session.Timeout(float64(cfg.Cluster.SegmentDuration) / 2.0))
 			}
 		})
 	}

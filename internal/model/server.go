@@ -23,29 +23,25 @@ type ServerSnapshot struct {
 	OWD         float64
 }
 
-func NewSnapshot(t float64, connections int, owd float64) *ServerSnapshot {
-	return &ServerSnapshot{
-		T:           t,
-		Connections: connections,
-		OWD:         owd,
-	}
-}
-
 type Server struct {
 	ID                 int
 	CurrentConnections int
 	CurrentOWD         float64
 	SpikeUntil         float64
 	Parameters         *ServerParameters
-	Snapshots          []*ServerSnapshot
 	mu                 sync.Mutex
 }
 
-func (s *Server) AddSnapshot(t float64) {
+func (s *Server) MakeSnapshot(t float64) *stats.SnapshotEvent {
 	s.mu.Lock()
-	ss := NewSnapshot(t, s.CurrentConnections, s.CurrentOWD)
-	s.Snapshots = append(s.Snapshots, ss)
+	ss := &stats.SnapshotEvent{
+		T:           t,
+		ServerID:    s.ID,
+		Connections: s.CurrentConnections,
+		OWD:         s.CurrentOWD,
+	}
 	s.mu.Unlock()
+	return ss
 }
 
 func (s *Server) Lock() {
@@ -69,25 +65,19 @@ func (s *Server) HandleRequest(
 	penalty float64,
 	sessionID int64,
 	cfg *config.Config,
-	st *stats.Statistics,
+	st stats.Statistics,
 	rng *common.RNG) bool {
 
 	s.Lock()
 	if s.CurrentConnections >= s.Parameters.MaxConnections {
 		s.Unlock()
-		st.AddDrop(&stats.DropEvent{
-			ServerID:  s.ID,
-			SessionID: sessionID,
-			T:         start,
-			Reason:    "max_conn",
-		})
 		return false
 	}
 
 	s.CurrentConnections++
 	s.Unlock()
 
-	duration := s.getDuration(cfg, rng) + penalty
+	duration := s.getDuration(cfg, rng) + penalty/1000.0
 	session.Wait(session.Timeout(duration))
 	s.Lock()
 	s.CurrentConnections--
@@ -130,7 +120,9 @@ type Spike struct {
 func InitServers(cfg *config.Config, rng *common.RNG) []*Server {
 	var servers []*Server
 	for i := range cfg.Cluster.Servers {
-		mbps := RandNormal(cfg.Cluster.CapMean, cfg.Cluster.CapCV, rng)
+		// mbps := RandNormal(cfg.Cluster.CapMean, cfg.Cluster.CapCV, rng)
+		sigmaLn := math.Sqrt(math.Log(1 + cfg.Cluster.CapCV*cfg.Cluster.CapCV))
+		mbps := RandLogNormal(math.Log(cfg.Cluster.CapMean)-0.5*sigmaLn*sigmaLn, cfg.Cluster.CapCV, rng)
 		owd := RandGamma(cfg.Cluster.OWDMean, cfg.Cluster.OWDCV, rng)
 
 		p := &ServerParameters{
@@ -144,7 +136,6 @@ func InitServers(cfg *config.Config, rng *common.RNG) []*Server {
 			CurrentConnections: 0,
 			CurrentOWD:         p.OWD,
 			Parameters:         p,
-			Snapshots:          make([]*ServerSnapshot, 0),
 			mu:                 sync.Mutex{},
 		}
 

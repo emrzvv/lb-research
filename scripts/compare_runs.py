@@ -4,10 +4,7 @@
 compare_runs.py  сравнивает несколько прогонов симуляции.
 
 Принимает 1...N директорий, в каждой должны лежать результаты симуляций *.csv.
-Строит графики:
-    - fairness_compare.png - Jain-fairness(t)
-    - cv_compare.png       - коэффициент вариации CV(t)
-    - drops_compare.png    - динамика отказов на бин BIN
+
 Пример запуска:
     python3 compare_runs.py out/exp1/csv out/exp2/csv -b 2 -o results/plots
 """
@@ -77,8 +74,65 @@ def redirects_series(csv_dir: str) -> pd.Series | None:
     red["bin"] = (red.time_s // BIN) * BIN
     return red.groupby("bin").size().sort_index()
 
+def stickiness_series(csv_dir: str) -> pd.Series | None:
+    """
+    На основе requests.csv считаем для каждого запроса, был ли он обслужен 'родным' сервером.
+    Ожидаем, что в requests.csv есть столбцы:
+        server_id, session_id, start_s, end_s, duration
+
+    Логика:
+    1) Для каждой session_id находим сервер initial_server, 
+       с которого пришёл первый запрос (минимальное start_s).
+    2) Для каждого запроса помечаем stickied = 1, если server_id == initial_server, иначе 0.
+    3) Биннинг по времени по полю start_s:
+         bin = floor(start_s / BIN) * BIN
+    4) Для каждого бина считаем долю stickied запросов:
+         stickiness(t) = sum(stickied_i) / total_requests_in_bin
+    """
+    path = os.path.join(csv_dir, "requests.csv")
+    if not os.path.exists(path):
+        print(f"[info] {path} не найден, stickiness не считается")
+        return None
+
+    req = pd.read_csv(path)  
+
+   
+    first_reqs = req.loc[:, ["session_id", "start_s", "server_id"]].copy()
+    first_reqs = first_reqs.sort_values(["session_id", "start_s"])
+    first_reqs = first_reqs.drop_duplicates(subset=["session_id"], keep="first")
+    initial_map = first_reqs.set_index("session_id")["server_id"].to_dict()
+
+    req["initial_server"] = req.session_id.map(initial_map)
+    req["stickied"] = (req.server_id == req.initial_server).astype(int)
+
+    req["bin"] = (req.start_s // BIN) * BIN
+
+    stickiness = {}
+    for t, grp in req.groupby("bin"):
+        if len(grp) == 0:
+            continue
+        stickiness[t] = grp.stickied.sum() / len(grp)
+
+    return pd.Series(stickiness).sort_index()
+
+def requests_series(csv_dir: str) -> pd.Series:
+    """
+    Считывает requests.csv и возвращает series: bin -> число запросов в этом бине.
+    """
+    path = os.path.join(csv_dir, "requests.csv")
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"{path} не найден")
+
+    req = pd.read_csv(path)
+    req["bin"] = (req.start_s // BIN) * BIN
+    s = req.groupby("bin").size()
+    return s.sort_index()
+
 # ──────────────────────── обход всех прогонов ──────────────────────────────
 fair_dict, cv_dict, drops_dict, total_drops, redirects_dict, total_redirects, rtt_dict = {}, {}, {}, {}, {}, {}, {}
+stickiness_dict = {}
+requests_dict = {}
+
 for run in args.runs:
     lbl = pathlib.Path(run.rstrip("/\\")).name
     fairness, cv = jain_and_cv(run)
@@ -98,17 +152,23 @@ for run in args.runs:
         total_redirects[lbl] = int(s_red.sum())
     else:
         print(f"[info] {lbl}: redirects.csv не найден")
-    req = load(run, "requests.csv")           # есть всегда
+    s_stick = stickiness_series(run)
+    if s_stick is not None:
+        stickiness_dict[lbl] = s_stick
+    req = load(run, "requests.csv")          
     rtt_dict[lbl] = req.duration.values
+
+    s_req = requests_series(run)
+    requests_dict[lbl] = s_req
 
 # ──────────────────────── 1. Jain fairness(t) ──────────────────────────────
 plt.figure(figsize=(12, 6))
 for lbl, series in fair_dict.items():
     sns.lineplot(x=series.index, y=series.values, label=lbl)
 plt.ylim(0, 1)
-plt.ylabel("Jain fairness J(t)")
-plt.xlabel("time (s)")
-plt.title("Сравнение прогонов: Jain fairness")
+plt.ylabel("Индекс J(t)")
+plt.xlabel("Время (с)")
+# plt.title("Сравнение прогонов: Jain fairness")
 plt.legend(title="run")
 plt.tight_layout()
 plt.savefig(os.path.join(OUT, "fairness_compare.png"))
@@ -118,9 +178,9 @@ plt.close()
 plt.figure(figsize=(12, 6))
 for lbl, series in cv_dict.items():
     sns.lineplot(x=series.index, y=series.values, label=lbl)
-plt.ylabel("CV(t)")
-plt.xlabel("time (s)")
-plt.title("Сравнение прогонов: коэффициент вариации CV")
+plt.ylabel("Коэффициент вариации")
+plt.xlabel("Время (с)")
+# plt.title("Сравнение прогонов: коэффициент вариации CV")
 plt.legend(title="run")
 plt.tight_layout()
 plt.savefig(os.path.join(OUT, "cv_compare.png"))
@@ -131,9 +191,9 @@ if drops_dict:
     plt.figure(figsize=(12, 6))
     for lbl, series in drops_dict.items():
         sns.lineplot(x=series.index, y=series.values, label=lbl)
-    plt.ylabel(f"drops per {BIN:.0f}s bin")
-    plt.xlabel("time (s)")
-    plt.title("Отказы (drops) во времени")
+    plt.ylabel(f"Количество отказов на {BIN:.0f}с")
+    plt.xlabel("Время (с)")
+    # plt.title("Отказы (drops) во времени")
     plt.legend(title="run")
     plt.tight_layout()
     plt.savefig(os.path.join(OUT, "drops_compare.png"))
@@ -145,9 +205,9 @@ if redirects_dict:
     plt.figure(figsize=(12, 6))
     for lbl, series in redirects_dict.items():
         sns.lineplot(x=series.index, y=series.values, label=lbl)
-    plt.ylabel(f"redirects per {BIN:.0f}s bin")
-    plt.xlabel("time (s)")
-    plt.title("Переключения (redirects) во времени")
+    plt.ylabel(f"Перенаправлений на {BIN:.0f}с")
+    plt.xlabel("Время (с)")
+    # plt.title("Переключения (redirects) во времени")
     plt.legend(title="run")
     plt.tight_layout()
     plt.savefig(os.path.join(OUT, "redirects_compare.png"))
@@ -158,8 +218,8 @@ if redirects_dict:
     runs = list(total_redirects.keys())
     vals = [total_redirects[r] for r in runs]
     sns.barplot(x=runs, y=vals)
-    plt.ylabel("total redirects")
-    plt.title("Суммарные redirect-ы по прогонам")
+    plt.ylabel("Суммарное кол-во перенаправлений")
+    # plt.title("Суммарные redirect-ы по прогонам")
     plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
     plt.savefig(os.path.join(OUT, "redirects_total_bar.png"))
@@ -168,24 +228,80 @@ if redirects_dict:
 # ──────────────────────── 5. Распределение RTT per strategy ───────────────
 plt.figure(figsize=(12, 6))
 
-# cглаживаем kernel density, без гистограмм
 for lbl, arr in rtt_dict.items():
-    # bw_adjust можно варьировать (0.3‒1.0) – чем меньше, тем «острее» кривая
-    sns.kdeplot(
-        arr,
-        bw_adjust=0.6,        # ширина ядра; подберите под свои данные
-        label=lbl,
-        clip=(0, None),       # обрезаем отрицательные значения
-        common_norm=False,    # плотность по каждому набору отдельно
-        fill=False,           # только линии, без заливки — никаких прямоугольников
-        linewidth=1.6
+    arr_ms = np.asarray(arr) * 1000
+    sns.histplot(
+        arr_ms,
+        bins=80,        
+        stat='count',
+        element='step', 
+        fill=False,
+        linewidth=1.4,
+        label=lbl
     )
 
-plt.xlabel("RTT (duration), s")
-plt.ylabel("density")
-plt.title("Распределение RTT по стратегиям")
+plt.xlabel("RTT, мс")
+plt.ylabel("Кол-во запросов")
+# plt.title("Распределение RTT по стратегиям")
+plt.xlim(left=0) # отрицательных значений быть не может
 plt.legend(title="run")
 plt.tight_layout()
 plt.savefig(os.path.join(OUT, "rtt_distribution_compare.png"))
 plt.close()
+
+# --- TEMP
+plt.figure(figsize=(12, 6))
+
+for lbl, arr in rtt_dict.items():
+    rtt_ms = np.asarray(arr) * 1000
+
+
+    x = np.sort(rtt_ms)
+    y = np.linspace(0, 1, len(x), endpoint=False)
+
+ 
+    plt.step(x, y, where="post", label=lbl)
+
+for q, ls in zip([0.5, 0.95], [":", "--"]):
+    plt.axhline(q, color="grey", linestyle=ls, linewidth=0.8)
+    plt.text(plt.xlim()[1]*0.98, q+0.01, f"{int(q*100)}-й перц.", 
+             ha="right", va="bottom", color="grey", fontsize=8)
+
+plt.xlabel("RTT, мс")
+plt.ylabel("Доля обслуженных запросов  ≤  RTT")
+plt.xlim(left=0)
+plt.ylim(0, 1)
+plt.legend(title="run", loc="lower right")
+plt.tight_layout()
+plt.savefig(os.path.join(OUT, "rtt_ecdf_compare.png"))
+plt.close()
+
+# ──────────────────────── 6. Stickiness(t) ────────────────────────────────
+if stickiness_dict:
+    plt.figure(figsize=(12, 6))
+    for lbl, series in stickiness_dict.items():
+        sns.lineplot(x=series.index, y=series.values, label=lbl)
+    plt.ylim(0, 1)
+    plt.ylabel("Доля изначальных серверов при обслуживании")
+    plt.xlabel("Время (с)")
+    # plt.title("Доля запросов, обслуженных 'родным' сервером (stickiness)")
+    plt.legend(title="run")
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUT, "stickiness_compare.png"))
+    plt.close()
+
+# ──────────────────────── 7. Requests(t) ────────────────────────────────
+if requests_dict:
+    plt.figure(figsize=(12, 6))
+    for lbl, series in requests_dict.items():
+        sns.lineplot(x=series.index, y=series.values, label=lbl)
+    plt.ylabel(f"Число запросов на{BIN:.0f}с")
+    plt.xlabel("Время (с)")
+    # plt.title("Сравнение прогонов: обслуженные запросы во времени")
+    plt.legend(title="run")
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUT, "requests_count_compare.png"))
+    plt.close()
+
+
 print(f"PNG-файлы сохранены в {OUT}")

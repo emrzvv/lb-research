@@ -47,7 +47,7 @@ func BuildChain(cfg *config.Config, servers []*model.Server, rng *common.RNG) Ba
 			return NewP2CBalancer(servers, rng)
 		},
 		"peak_ewma": func(s []*model.Server, c *config.Config, r *common.RNG) Balancer {
-			return NewPeakEWMABalancer(servers, 0.1)
+			return NewPeakEWMABalancer(servers, c.Balancer.EWMAAlpha)
 		},
 	}
 
