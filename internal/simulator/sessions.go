@@ -21,7 +21,7 @@ func tryPickServer(session simgo.Process,
 	tries := 0
 	for pickedServer == nil && tries < cfg.Cluster.FirstPickRetries {
 		tries++
-		session.Wait(session.Timeout(cfg.Cluster.FirstPickBackoff))
+		session.Wait(session.Timeout(cfg.Cluster.FirstPickBackoff / 1000.0))
 		pickedServer = balancer.PickServer(sessionID)
 	}
 	return pickedServer, pickedServer != nil
@@ -77,10 +77,9 @@ func generateSessions(
 					}
 					retries++
 					if retries <= cfg.Cluster.MaxRetriesPerSegment {
-						session.Wait(session.Timeout(cfg.Cluster.RetriesPerSegmentBackoff))
+						session.Wait(session.Timeout(cfg.Cluster.RetriesPerSegmentBackoff / 1000.0))
 						continue
 					}
-
 					if switches >= cfg.Cluster.MaxSwitchesPerSession {
 						st.AddDrop(&stats.DropEvent{
 							ServerID:  pickedServer.ID,
@@ -91,8 +90,8 @@ func generateSessions(
 						return
 					}
 
-					newPickedServer, ok := tryPickServer(session, balancer, sessionID, cfg)
-					if !ok {
+					newPickedServer := balancer.PickServer(sessionID)
+					if newPickedServer == nil {
 						st.AddDrop(&stats.DropEvent{
 							ServerID: pickedServer.ID, SessionID: sessionID, T: now, Reason: "no_new_server"})
 						return

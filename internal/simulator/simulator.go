@@ -34,7 +34,6 @@ func (r *rateCtrl) Set(v float64) {
 
 func Run(cfg *config.Config, servers []*model.Server, balancer balancer.Balancer, rng *common.RNG, outDir string) stats.Statistics {
 	simulation := simgo.NewSimulation()
-	// statistics := stats.NewStatistics(cfg)
 	if err := export.WriteServersCfgToCSV(servers, outDir+"/servers.csv"); err != nil {
 		log.Fatalf("cannot write servers.csv: %v", err)
 	}

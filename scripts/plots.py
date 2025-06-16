@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-plots_ru.py - построение графиков из CSV-результатов симуляции (русская локализация)
+plots_ru.py - построение графиков для одной симуляции из CSV-результатов
 Пример запуска:
-    python3 plots_ru.py -c out/exp1/csv -p out/exp1/plots
+    python3 plots.py -c out/exp1/csv -p out/exp1/plots
 """
 
 import os, warnings, argparse, math
@@ -12,8 +12,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 # ──────────────────────── настройки шрифтов ─────────────────────────
-plt.rcParams["font.family"] = "DejaVu Sans"          # поддержка кириллицы
-plt.rcParams["axes.unicode_minus"] = False           # корректный минус
+plt.rcParams["font.family"] = "DejaVu Sans"
+plt.rcParams["axes.unicode_minus"] = False  
 
 # ──────────────────────── аргументы CLI ─────────────────────────────
 parser = argparse.ArgumentParser(
@@ -74,11 +74,11 @@ ts = arrivals.groupby("bin").size().reset_index(name="count")
 ax_a.bar(
     ts["bin"],
     ts["count"],
-    width=0.9,                  # чуть уже, чтобы видеть контур
+    width=0.9,
     color="tab:red",
-    linewidth=0.1,              # толщина обводки
-    label="прибытий / 1 с",
-    zorder=2                    # поверх сетки
+    linewidth=0.1, 
+    label="Запросов / 1 с",
+    zorder=2
 )
 
 # скользящее среднее по 10 секунд
@@ -90,11 +90,10 @@ ax_a.plot(ts["bin"], ts["ma"], color="tab:blue", lw=1.4,
 # линия базы-300 rps
 ax_a.axhline(300, color="tab:orange", lw=1, ls="--", label="базовые 300 rps")
 
-ax_a.set_title("Прибытия (агрегация 1 с)", fontsize=12)
+# ax_a.set_title("Поступающие запросы (агрегация 1 с)", fontsize=12)
 ax_a.set_xlabel("время, с", fontsize=10)
-ax_a.set_ylabel("прибытия", fontsize=10)
+ax_a.set_ylabel("количество запросов", fontsize=10)
 
-# тики X каждые 30 с, чтобы не было каши
 xticks = np.arange(0, ts["bin"].max()+1, 30)
 ax_a.set_xticks(xticks)
 ax_a.tick_params(axis="x", rotation=90, labelsize=8)
@@ -105,13 +104,22 @@ ax_a.legend(frameon=False, fontsize=9)
 sess = snaps.groupby("time_s").connections.sum().reset_index()
 sns.lineplot(data=sess, x="time_s", y="connections", ax=ax_s,
              linewidth=1.4, color="tab:green")
-ax_s.set_title("Активные сессии", fontsize=12)
+# ax_s.set_title("Активные сессии", fontsize=12)
 ax_s.set_xlabel("время, с", fontsize=10)
-ax_s.set_ylabel("сессии", fontsize=10)
+ax_s.set_ylabel("количество активных сессий", fontsize=10)
 ax_s.tick_params(axis="both", labelsize=9)
 ax_s.set_xticks(xticks)
 
-fig1.tight_layout(pad=1.2)
+fig1.subplots_adjust(bottom=0.15) 
+
+for ax, label in zip([ax_a, ax_s], ['а) Поступающие запросы (агрегация 1с)', 'б) Активные сессии (агрегация 1с)']):        # порядок важен!
+    ax.annotate(label,
+                xy=(0.5, -0.25),
+                xycoords='axes fraction',
+                ha='center', va='top',
+                fontsize=12)
+
+fig1.tight_layout(rect=[0, 0.05, 1, 1])
 fig1.savefig(os.path.join(PLOT_DIR, "arrivals_sessions.png"),
              dpi=300, bbox_inches="tight")
 plt.close(fig1)
@@ -166,9 +174,8 @@ snaps["util"] = snaps.connections / snaps.server_id.map(max_conn)
 
 heat_u = snaps.groupby(["server_id", "bin"]).util.max().unstack(fill_value=0)
 
-# ── размер: широкая «полоса», хорошо смотрится после поворота ────────────────
-fig_w = max(10, heat_u.shape[1] * 0.06)   # ширина растёт с числом колонок
-fig_h = 12                                 # фиксированная высота
+fig_w = max(10, heat_u.shape[1] * 0.06)
+fig_h = 12 
 plt.figure(figsize=(fig_w, fig_h), dpi=300)
 
 ax = sns.heatmap(
@@ -179,20 +186,20 @@ ax = sns.heatmap(
     yticklabels=True
 )
 
-# ── ось X: показываем метку раз в N столбцов, чтобы шрифт не «слипался» ─────
-max_labels = 25                           # не более 25 подписей
+# ── ось X: показываем метку раз в N столбцов─────
+max_labels = 25 # не более 25 подписей
 step = max(1, heat_u.shape[1] // max_labels)
 xticks = np.arange(0, heat_u.shape[1], step)
-ax.set_xticks(xticks + 0.5)               # +0.5 → по центру ячейки
+ax.set_xticks(xticks + 0.5) 
 ax.set_xticklabels(
-    (heat_u.columns[xticks]).astype(int), # сами значения времени
-    rotation=90, ha="center", fontsize=14
+    (heat_u.columns[xticks]).astype(int),
+    rotation=90, ha="center", fontsize=18
 )
 
 # ── ось Y (серверы) ──────────────────────────────────────────────────────────
 ax.set_yticklabels(
     ax.get_yticklabels(),
-    rotation=0, ha="right", fontsize=14
+    rotation=0, ha="right", fontsize=18
 )
 
 # ── заголовки и сетка ────────────────────────────────────────────────────────
@@ -200,9 +207,9 @@ ax.set_title(
     f"Использование (соединения / max_conn)  за {bin_h:.0f} с",
     fontsize=12, pad=12
 )
-ax.set_xlabel("время, с", fontsize=14)
-ax.set_ylabel("сервер", fontsize=14)
-ax.grid(False)                            # у heatmap своя сетка
+ax.set_xlabel("время, с", fontsize=18)
+ax.set_ylabel("сервер", fontsize=18)
+ax.grid(False) # у heatmap своя сетка
 
 plt.tight_layout(pad=1.2)
 plt.savefig(os.path.join(PLOT_DIR, "heatmap_utilisation.png"),
@@ -244,11 +251,11 @@ plt.close()
 if not drops.empty:
     # ── 5.0 рассчитываем шаг агрегирования так, чтобы ≤ 30 столбцов ────────
     total_t  = drops.time_s.max() - drops.time_s.min()
-    step     = max(1, int(round(total_t / 30)))      # секунд в корзине
+    step     = max(1, int(round(total_t / 30))) # секунд в корзине
     drops["bin"] = (drops.time_s // step) * step
 
     # ── 5.1 Bar-чарты (потери по времени + по серверам) ─────────────────────
-    FIG_W, FIG_H = 6.7, 9.4          # ≈ 170 × 240 мм
+    FIG_W, FIG_H = 6.7, 9.4 # ~~ 170 x 240 мм
     fig3, (ax1, ax2) = plt.subplots(
         2, 1, figsize=(FIG_W, FIG_H), dpi=300, sharex=False
     )
@@ -261,11 +268,10 @@ if not drops.empty:
         color="tab:red",
         edgecolor="black", linewidth=0.2
     )
-    ax1.set_title(f"Потери (окно {step} с)", fontsize=12)
+    # ax1.set_title(f"Потери (окно {step} с)", fontsize=12)
     ax1.set_xlabel("время, с", fontsize=10)
     ax1.set_ylabel("потери",   fontsize=10)
 
-    # читаемые тики X (≤ 15 подписей)
     xt = mix["bin"][::max(1, len(mix)//15)]
     ax1.set_xticks(xt)
     ax1.set_xticklabels(xt.astype(int), rotation=90, ha="center", fontsize=8)
@@ -274,13 +280,22 @@ if not drops.empty:
     # 5.1.2 Суммарно по серверам ---------------------------------------------
     bar = drops.groupby("server_id").size().reset_index(name="drops")
     sns.barplot(data=bar, x="server_id", y="drops", palette=palette, ax=ax2)
-    ax2.set_title("Суммарные потери по серверам", fontsize=12)
+    # ax2.set_title("Суммарные потери по серверам", fontsize=12)
     ax2.set_xlabel("сервер", fontsize=10)
     ax2.set_ylabel("потери",  fontsize=10)
     ax2.tick_params(axis="x", rotation=90, labelsize=8)
     ax2.tick_params(axis="y", labelsize=9)
 
-    fig3.tight_layout(pad=1.2)
+    fig3.subplots_adjust(bottom=0.15)  # место под подписями
+
+    for ax, label in zip([ax1, ax2], [f'а) Потери (окно {step}с)', 'б) Суммарные потери по серверам']):
+        ax.annotate(label,
+                    xy=(0.5, -0.25),        
+                    xycoords='axes fraction',
+                    ha='center', va='top',
+                    fontsize=12)
+
+    fig3.tight_layout(rect=[0, 0.05, 1, 1])  
     fig3.savefig(os.path.join(PLOT_DIR, "drops.png"),
                  dpi=300, bbox_inches="tight")
     plt.close(fig3)
@@ -289,7 +304,7 @@ if not drops.empty:
     heat_d = drops.groupby(["server_id", "bin"]).size().unstack(fill_value=0)
 
     import numpy as np
-    fig_w = max(6, heat_d.shape[1] * 0.06)   # ширина растёт с числом колонок
+    fig_w = max(6, heat_d.shape[1] * 0.06) # ширина растёт с числом колонок
     fig_h = 10
     plt.figure(figsize=(fig_w, fig_h), dpi=300)
 
@@ -300,7 +315,6 @@ if not drops.empty:
         yticklabels=True
     )
 
-    # X-метки: ≤ 25, чтобы не слиплись
     max_lbl = 25
     step_x  = max(1, heat_d.shape[1] // max_lbl)
     xticks  = np.arange(0, heat_d.shape[1], step_x)
@@ -310,7 +324,6 @@ if not drops.empty:
         rotation=90, ha="center", fontsize=8
     )
 
-    # Y-метки (серверы)
     ax_h.set_yticklabels(
         ax_h.get_yticklabels(),
         rotation=0, ha="right", fontsize=9
@@ -358,45 +371,66 @@ if not drops.empty:
 # plt.close(fig)
 
 # ==== 6.1  Таблица конфигурации (отдельный файл) =============================
-fig_cfg, ax_cfg = plt.subplots(
-    figsize=(len(cfg.columns) * 1.8, len(cfg) * 0.6 + 1), dpi=300
+# --- подготовка данных для вывода -----------------------------------------
+display_cfg = (
+    cfg # исходный DataFrame
+      .rename(columns={
+          "id":       "Идентификатор",
+          "mbps":     "Пропускная способность (Мбит/с)",
+          "owd_ms":   "Односторонняя задержка (мс)",
+          "max_conn": "Максимальное\nколичество соединений",
+      }) 
+      .assign(
+          **{
+              "Идентификатор":                lambda d: d["Идентификатор"].astype(int),
+              "Максимальное\nколичество соединений": lambda d: d[
+                  "Максимальное\nколичество соединений"].astype(int),
+          }
+      )
 )
+
+fmt = lambda x: f"{x:,.2f}".replace(",", " ").replace(".", ",")
+display_cfg["Пропускная способность (Мбит/с)"]                 = display_cfg["Пропускная способность (Мбит/с)"].map(fmt)          # форматирование float  :contentReference[oaicite:1]{index=1}
+display_cfg["Односторонняя задержка (мс)"] = display_cfg["Односторонняя задержка (мс)"].map(fmt)
+
+fig_cfg, ax_cfg = plt.subplots(
+    figsize=(len(display_cfg.columns) * 1.8, len(display_cfg) * 0.6 + 1), dpi=300
+)
+
 tbl = ax_cfg.table(
-    cellText=cfg.values,
-    colLabels=cfg.columns,
+    cellText=display_cfg.values,
+    colLabels=display_cfg.columns,
     loc="center",
     cellLoc="center",
 )
+tbl.auto_set_column_width(col=list(range(len(display_cfg.columns))))
 tbl.auto_set_font_size(False)
 tbl.set_fontsize(12)
-tbl.scale(1, 1.4)
+tbl.scale(1, 1.6)
+
 ax_cfg.set_title("Конфигурация серверов", pad=12, fontsize=14)
 ax_cfg.axis("off")
+
 fig_cfg.tight_layout()
 fig_cfg.savefig(os.path.join(PLOT_DIR, "config_table.png"),
                 dpi=300, bbox_inches="tight")
 plt.close(fig_cfg)
 
 # ==== 6.2  Сводка результатов (отдельный файл) ===============================
-#
-#  • x-ось = строковой номер сервера ⇒ подписи выводятся всегда
-#  • размер графика подобран под A4-landscape (11.69" × 9")
-#
 
 # ── подготовим строковые метки серверов ---------------------------------------
 summ = summ.sort_values("id").reset_index(drop=True)
 
-# 2. строковая версия id для категориальной оси
 summ["srv"] = summ["id"].astype(str)
 
 fig_sum, (ax_top, ax_bot) = plt.subplots(
-    2, 1, figsize=(11.69, 9.0),           # A4-landscape
+    2, 1, figsize=(11.69, 9.0),
     sharex=False, dpi=300
 )
 
 # ── 1) обслужено / отклонено ---------------------------------------------------
 m = summ.melt(
-    id_vars="srv",                        # ← строковой идентификатор
+    id_vars="srv",
     value_vars=["served", "dropped"],
     var_name="metric", value_name="count"
 )
@@ -432,16 +466,14 @@ ax_bot.set(
     xlabel="Сервер", ylabel="Количество"
 )
 
-# ── оформление оси X ----------------------------------------------------------
-# ── после построения ОБОИХ barplot-ов  ──────────────────────────────
-labels = summ["id"].astype(str).tolist()        # «1», «2», …
+
+labels = summ["id"].astype(str).tolist()
 
 for ax in (ax_top, ax_bot):
-    ax.set_xticks(range(len(labels)))           # позиции 0…N-1
+    ax.set_xticks(range(len(labels))) 
     ax.set_xticklabels(labels, rotation=90,
-                       ha="center", fontsize=9) # подписи видно
+                       ha="center", fontsize=9)
 
-# чуть-чуть больше места внизу, чтобы цифры не обрезались
 fig_sum.subplots_adjust(bottom=0.17)
 fig_sum.tight_layout()
 fig_sum.savefig(os.path.join(PLOT_DIR, "summary.png"),

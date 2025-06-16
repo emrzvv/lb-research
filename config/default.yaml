@@ -14,10 +14,10 @@ spikes:
     factor: 3           # *3 от base_rps
   - at: 300
     duration: 60
-    factor: 20
+    factor: 8
   - at: 450
     duration: 40
-    factor: 7
+    factor: 5
 
 cluster:
   servers: 35             # число серверов в кластере
@@ -25,13 +25,13 @@ cluster:
   cap_mean_mbps: 500      # средняя пропускная способность сервера
   cap_cv: 0.3             # CV (σ/μ) пропускной способности
   owd_mean: 300           # средний one-way delay, мс
-  owd_cv: 0.7             # CV задержки
-  sigma_server: 0.2       # CV лог-нормального шума
+  owd_cv: 0.5             # CV задержки
+  sigma_server: 0.3       # CV лог-нормального шума
   max_retries: 2          # макс кол-во запросов одного и того же .ts-сегмента
   retries_backoff: 100    # задержка между попытками запросов .ts-сегментов
-  max_switches: 2         # макс кол-во перебросов с "домашнего" сервера
+  max_switches: 4         # макс кол-во перебросов с "домашнего" сервера
   switch_penalty: 200     # штраф (мс) при смене сервера
-  first_pick_retries: 1   # количество попыток начать сессию
+  first_pick_retries: 3   # количество попыток начать сессию
   first_pick_backoff: 200 # интервал для следующего запроса на начало сессии
   
 

@@ -4,10 +4,7 @@
 compare_runs.py  сравнивает несколько прогонов симуляции.
 
 Принимает 1...N директорий, в каждой должны лежать результаты симуляций *.csv.
-Строит графики:
-    - fairness_compare.png - Jain-fairness(t)
-    - cv_compare.png       - коэффициент вариации CV(t)
-    - drops_compare.png    - динамика отказов на бин BIN
+
 Пример запуска:
     python3 compare_runs.py out/exp1/csv out/exp2/csv -b 2 -o results/plots
 """
@@ -97,23 +94,19 @@ def stickiness_series(csv_dir: str) -> pd.Series | None:
         print(f"[info] {path} не найден, stickiness не считается")
         return None
 
-    req = pd.read_csv(path)  # ожидание колонок: server_id, session_id, start_s, ...
+    req = pd.read_csv(path)  
 
-    # 1) Определяем для каждой сессии initial_server (сервер первой записи по start_s)
-    #    Берём минимальное start_s для каждой session_id
+   
     first_reqs = req.loc[:, ["session_id", "start_s", "server_id"]].copy()
     first_reqs = first_reqs.sort_values(["session_id", "start_s"])
     first_reqs = first_reqs.drop_duplicates(subset=["session_id"], keep="first")
     initial_map = first_reqs.set_index("session_id")["server_id"].to_dict()
 
-    # 2) Проставляем для каждой строки, какой initial_server у её session_id
     req["initial_server"] = req.session_id.map(initial_map)
     req["stickied"] = (req.server_id == req.initial_server).astype(int)
 
-    # 3) Биннинг по времени по полю start_s
     req["bin"] = (req.start_s // BIN) * BIN
 
-    # 4) Группируем по bin и вычисляем долю stickied=1
     stickiness = {}
     for t, grp in req.groupby("bin"):
         if len(grp) == 0:
@@ -124,14 +117,13 @@ def stickiness_series(csv_dir: str) -> pd.Series | None:
 
 def requests_series(csv_dir: str) -> pd.Series:
     """
-    Считывает requests.csv и возвращает Series: bin → число запросов в этом бине.
-    Предполагается, что в requests.csv есть поле start_s.
+    Считывает requests.csv и возвращает series: bin -> число запросов в этом бине.
     """
     path = os.path.join(csv_dir, "requests.csv")
     if not os.path.exists(path):
         raise FileNotFoundError(f"{path} не найден")
 
-    req = pd.read_csv(path)  # ожидаем хотя бы столбцы: start_s, session_id, server_id, …
+    req = pd.read_csv(path)
     req["bin"] = (req.start_s // BIN) * BIN
     s = req.groupby("bin").size()
     return s.sort_index()
@@ -163,7 +155,7 @@ for run in args.runs:
     s_stick = stickiness_series(run)
     if s_stick is not None:
         stickiness_dict[lbl] = s_stick
-    req = load(run, "requests.csv")           # есть всегда
+    req = load(run, "requests.csv")          
     rtt_dict[lbl] = req.duration.values
 
     s_req = requests_series(run)
@@ -186,7 +178,7 @@ plt.close()
 plt.figure(figsize=(12, 6))
 for lbl, series in cv_dict.items():
     sns.lineplot(x=series.index, y=series.values, label=lbl)
-plt.ylabel("CV(t)")
+plt.ylabel("Коэффициент вариации")
 plt.xlabel("Время (с)")
 # plt.title("Сравнение прогонов: коэффициент вариации CV")
 plt.legend(title="run")
@@ -237,12 +229,12 @@ if redirects_dict:
 plt.figure(figsize=(12, 6))
 
 for lbl, arr in rtt_dict.items():
-    arr_ms = np.asarray(arr) * 1000          # 1 секунды → миллисекунды
+    arr_ms = np.asarray(arr) * 1000
     sns.histplot(
         arr_ms,
-        bins=80,                             # подберите шаг при желании
-        stat='count',                        # 2 считаем частоты, не плотность
-        element='step',                      # только контуры, без заливки
+        bins=80,        
+        stat='count',
+        element='step', 
         fill=False,
         linewidth=1.4,
         label=lbl
@@ -251,7 +243,7 @@ for lbl, arr in rtt_dict.items():
 plt.xlabel("RTT, мс")
 plt.ylabel("Кол-во запросов")
 # plt.title("Распределение RTT по стратегиям")
-plt.xlim(left=0)                             # отрицательных значений быть не может
+plt.xlim(left=0) # отрицательных значений быть не может
 plt.legend(title="run")
 plt.tight_layout()
 plt.savefig(os.path.join(OUT, "rtt_distribution_compare.png"))
@@ -263,14 +255,13 @@ plt.figure(figsize=(12, 6))
 for lbl, arr in rtt_dict.items():
     rtt_ms = np.asarray(arr) * 1000
 
-    # строим эмпирическую CDF
-    x = np.sort(rtt_ms)
-    y = np.linspace(0, 1, len(x), endpoint=False)  # F(x) = P(RTT ≤ x)
 
-    # линия «лестницей» — чтобы ECDF была аккуратная
+    x = np.sort(rtt_ms)
+    y = np.linspace(0, 1, len(x), endpoint=False)
+
+ 
     plt.step(x, y, where="post", label=lbl)
 
-# горизонтальные подсказки: медиана (0.5) и p95 (0.95)
 for q, ls in zip([0.5, 0.95], [":", "--"]):
     plt.axhline(q, color="grey", linestyle=ls, linewidth=0.8)
     plt.text(plt.xlim()[1]*0.98, q+0.01, f"{int(q*100)}-й перц.", 
