@@ -79,9 +79,6 @@ func Load(path string) (*Config, error) {
 	}
 
 	fillDefaults(&cfg)
-	if err := validate(&cfg); err != nil {
-		return nil, fmt.Errorf("error when validating config: %w", err)
-	}
 	return &cfg, nil
 }
 
@@ -157,8 +154,4 @@ func fillDefaults(c *Config) {
 	}
 
 	c.Cluster.SegmentSizeBytes = c.Cluster.Bitrate * 1_000_000 / 8 * c.Cluster.SegmentDuration
-}
-
-func validate(cfg *Config) error {
-	return nil
 }
